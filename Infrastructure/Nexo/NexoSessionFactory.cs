@@ -20,7 +20,7 @@ namespace SubiektNexoConsole.Infrastructure.Nexo
         {
             var danePolaczenia = DanePolaczenia.Jawne(
                 _config.Database.SqlServer,
-                _config.Database.DatabaseName,
+                "nexo_"+_config.Database.DatabaseName,
                 _config.Database.UseSqlAuth,
                 _config.Database.SqlUser,
                 _config.Database.SqlPassword);
