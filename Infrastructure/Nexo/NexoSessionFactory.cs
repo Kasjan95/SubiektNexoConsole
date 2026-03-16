@@ -9,25 +9,33 @@ namespace SubiektNexoConsole.Infrastructure.Nexo
 {
     public class NexoSessionFactory : ISessionFactory
     {
+        DanePolaczenia danePolaczenia;
         private readonly AppConfig _config;
 
-        public NexoSessionFactory(AppConfig config)
+        public NexoSessionFactory(AppConfig config, bool debug)
         {
             _config = config;
+            if (debug)
+            {
+                Console.WriteLine("Uruchomiono w trybie debugowania. Używane będą jawne dane połączenia z konfiguracji.");
+                danePolaczenia = DanePolaczenia.Jawne(
+                    _config.Database.SqlServer,
+                    _config.Database.DatabaseName,
+                    _config.Database.UseSqlAuth,
+                    _config.Database.SqlUser,
+                    _config.Database.SqlPassword);
+            }
+            else
+            {
+                danePolaczenia = DanePolaczenia.Odbierz();
+            }
         }
 
         public Uchwyt Create()
         {
-            var danePolaczenia = DanePolaczenia.Jawne(
-                _config.Database.SqlServer,
-                _config.Database.DatabaseName,
-                _config.Database.UseSqlAuth,
-                _config.Database.SqlUser,
-                _config.Database.SqlPassword);
-
             var menedzerPolaczen = new MenedzerPolaczen();
 
-            var uchwyt = menedzerPolaczen.Polacz(danePolaczenia, ProductId.Subiekt);
+            var uchwyt = menedzerPolaczen.Polacz(danePolaczenia, ProductId.Subiekt, ProductId.Subiekt);
             uchwyt.ZalogujOperatora(
                 _config.SystemLogin.NexoUser,
                 _config.SystemLogin.NexoPassword);

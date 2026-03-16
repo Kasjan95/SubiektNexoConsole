@@ -1,8 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-	<nexoSdkBinPath>C:\Users\Kasjan\source\nexoSDK_59.1.0.9115\Bin\</nexoSdkBinPath>
-	<nexoSdkNarzedziaPath>C:\Users\Kasjan\source\nexoSDK_59.1.0.9115\Narzedzia\</nexoSdkNarzedziaPath>
+	<nexoSdkBinPath>C:\Users\PC\source\nexoSDK_59.1.1.9137\Bin\</nexoSdkBinPath>
+	<nexoSdkNarzedziaPath>C:\Users\PC\source\nexoSDK_59.1.1.9137\Narzedzia\</nexoSdkNarzedziaPath>
   </PropertyGroup>
 
   <ItemGroup>
