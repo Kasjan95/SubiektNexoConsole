@@ -1,5 +1,5 @@
 ﻿
-namespace SubiektNexoConsole.Application.Warehouses
+namespace SubiektNexoConnector.Core.Application.Warehouses
 {
     public sealed record WarehouseDto(
         string Symbol,

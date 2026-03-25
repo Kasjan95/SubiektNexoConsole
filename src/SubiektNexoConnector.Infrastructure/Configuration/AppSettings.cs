@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace SubiektNexoConsole.Infrastructure.Configuration
+namespace SubiektNexoConnector.Infrastructure.Configuration
 {
     public class AppConfig
     {

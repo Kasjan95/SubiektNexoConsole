@@ -1,6 +1,6 @@
 ﻿using InsERT.Moria.Sfera;
 
-namespace SubiektNexoConsole.Application.Abstractions
+namespace SubiektNexoConnector.Infrastructure.Abstractions
 {
     public interface ISessionFactory
     {

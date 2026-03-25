@@ -1,11 +1,10 @@
 ﻿using InsERT.Moria.Sfera;
 using InsERT.Mox.Product;
-using SubiektNexoConsole.Application.Abstractions;
-using SubiektNexoConsole.Bootstrap;
-using SubiektNexoConsole.Infrastructure.Configuration;
+using SubiektNexoConnector.Infrastructure.Abstractions;
+using SubiektNexoConnector.Infrastructure.Configuration;
 using System;
 
-namespace SubiektNexoConsole.Infrastructure.Nexo
+namespace SubiektNexoConnector.Infrastructure.Nexo
 {
     public class NexoSessionFactory : ISessionFactory
     {

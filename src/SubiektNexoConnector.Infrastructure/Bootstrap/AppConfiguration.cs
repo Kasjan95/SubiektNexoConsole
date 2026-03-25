@@ -1,8 +1,8 @@
 ﻿using Microsoft.Extensions.Configuration;
-using SubiektNexoConsole.Infrastructure.Configuration;
+using SubiektNexoConnector.Infrastructure.Configuration;
 using System;
 
-namespace SubiektNexoConsole.Bootstrap;
+namespace SubiektNexoConnector.Infrastructure.Bootstrap;
 
 public static class AppConfiguration
 {

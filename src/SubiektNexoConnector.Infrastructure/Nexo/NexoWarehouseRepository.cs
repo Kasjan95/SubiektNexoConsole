@@ -1,12 +1,12 @@
 ﻿using InsERT.Moria.Sfera;
-using SubiektNexoConsole.Application.Abstractions;
-using SubiektNexoConsole.Application.Warehouses;
+using SubiektNexoConnector.Infrastructure.Abstractions;
+using SubiektNexoConnector.Core.Application.Warehouses;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace SubiektNexoConsole.Infrastructure.Nexo
+namespace SubiektNexoConnector.Infrastructure.Nexo
 {
-    public class NexoWarehouseRepository
+    public class NexoWarehouseRepository : IWarehouseRepository
     {
         private readonly ISessionFactory _sessionFactory;
 
@@ -25,5 +25,6 @@ namespace SubiektNexoConsole.Infrastructure.Nexo
                 .Select(w => new WarehouseDto(w.Symbol, w.Nazwa))
                 .ToArray();
         }
+
     }
 }
