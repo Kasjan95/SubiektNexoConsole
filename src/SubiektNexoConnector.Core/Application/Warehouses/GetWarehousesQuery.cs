@@ -1,6 +1,6 @@
 ﻿namespace SubiektNexoConnector.Core.Application.Warehouses
 {
-    public class GetWarehousesQuery
+    public sealed class GetWarehousesQuery
     {
     }
 }
