@@ -2,44 +2,33 @@
 using InsERT.Mox.Product;
 using SubiektNexoConnector.Infrastructure.Abstractions;
 using SubiektNexoConnector.Infrastructure.Configuration;
-using System;
 
-namespace SubiektNexoConnector.Infrastructure.Nexo
+namespace SubiektNexoConnector.Infrastructure.Nexo;
+
+public class NexoSessionFactory : ISessionFactory
 {
-    public class NexoSessionFactory : ISessionFactory
+    private readonly AppConfig _config;
+    private readonly DanePolaczenia _danePolaczenia;
+
+    public NexoSessionFactory(AppConfig config, DanePolaczenia danePolaczenia)
     {
-        DanePolaczenia danePolaczenia;
-        private readonly AppConfig _config;
+        _config = config;
+        _danePolaczenia = danePolaczenia;
+    }
 
-        public NexoSessionFactory(AppConfig config, bool debug)
-        {
-            _config = config;
-            if (debug)
-            {
-                Console.WriteLine("Uruchomiono w trybie debugowania. Używane będą jawne dane połączenia z konfiguracji.");
-                danePolaczenia = DanePolaczenia.Jawne(
-                    _config.Database.SqlServer,
-                    _config.Database.DatabaseName,
-                    _config.Database.UseSqlAuth,
-                    _config.Database.SqlUser,
-                    _config.Database.SqlPassword);
-            }
-            else
-            {
-                danePolaczenia = DanePolaczenia.Odbierz();
-            }
-        }
+    public Uchwyt Create()
+    {
+        var menedzerPolaczen = new MenedzerPolaczen();
 
-        public Uchwyt Create()
-        {
-            var menedzerPolaczen = new MenedzerPolaczen();
+        var uchwyt = menedzerPolaczen.Polacz(
+            _danePolaczenia,
+            ProductId.Subiekt,
+            ProductId.Subiekt);
 
-            var uchwyt = menedzerPolaczen.Polacz(danePolaczenia, ProductId.Subiekt, ProductId.Subiekt);
-            uchwyt.ZalogujOperatora(
-                _config.SystemLogin.NexoUser,
-                _config.SystemLogin.NexoPassword);
-            Console.WriteLine("Połączono z bazą Subiekt Nexo i zalogowano operatora.");
-            return uchwyt;
-        }
+        uchwyt.ZalogujOperatora(
+            _config.SystemLogin.NexoUser,
+            _config.SystemLogin.NexoPassword);
+
+        return uchwyt;
     }
 }

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "SubiektNexoConnector.Console": {
+      "commandName": "Project",
+      "commandLineArgs": "--config"
+    }
+  }
+}
