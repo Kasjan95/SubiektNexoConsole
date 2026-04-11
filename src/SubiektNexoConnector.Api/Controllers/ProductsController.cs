@@ -1,10 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using SubiektNexoConnector.Core.Application.Products;
 
 namespace SubiektNexoConnector.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("/[controller]")]
+[Tags("Products")]
 public class ProductsController : ControllerBase
 {
     [HttpGet]
@@ -15,13 +16,12 @@ public class ProductsController : ControllerBase
         return Ok(result);
     }
 
-    [HttpGet("by-symbol/{symbol}")]
+    [HttpGet("{sku}")]
     public ActionResult<ProductDetailsDto> GetDetails(
-        String symbol,
-        [FromQuery] String warehouseSymbol,
+        String sku,
         [FromServices] GetProductDetailsHandler handler)
     {
-        var result = handler.Handle(new GetProductDetailsQuery(symbol, warehouseSymbol));
+        var result = handler.Handle(new GetProductDetailsQuery(sku));
 
         if (result is null)
             return NotFound();

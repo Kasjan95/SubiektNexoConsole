@@ -1,15 +1,12 @@
-﻿namespace SubiektNexoConnector.Core.Application.Products
+﻿
+namespace SubiektNexoConnector.Core.Application.Products
 {
     public sealed record ProductDetailsDto(
         int Id,
         string SKU,
         string Name,
         string? EAN,
-        string WarehouseSymbol,
-        decimal Available,
-        decimal Reserved,
-        StockMovementDto Receipts,
-        StockMovementDto Issues,
-        StockMovementDto Returns
+        IReadOnlyCollection<ProductPriceDto> Prices,
+        IReadOnlyCollection<ProductStockDto> Stocks
     );
 }

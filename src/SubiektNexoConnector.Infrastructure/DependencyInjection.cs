@@ -1,4 +1,4 @@
-﻿using InsERT.Moria.Sfera;
+using InsERT.Moria.Sfera;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -47,6 +47,7 @@ public static class DependencyInjection
 
         services.AddTransient<GetProductsHandler>();
         services.AddTransient<GetProductDetailsHandler>();
+        services.AddTransient<GetProductFromWarehouseHandler>();
         services.AddTransient<GetWarehousesHandler>();
 
         return services;

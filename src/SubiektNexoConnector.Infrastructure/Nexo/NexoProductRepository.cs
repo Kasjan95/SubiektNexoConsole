@@ -1,4 +1,4 @@
-﻿using InsERT.Moria.ModelDanych;
+using InsERT.Moria.ModelDanych;
 using InsERT.Moria.Sfera;
 using InsERT.Mox.DataAccess.EntityFramework;
 using SubiektNexoConnector.Core.Application.Products;
@@ -13,38 +13,66 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
         {
             _sessionFactory = sessionFactory;
         }
-        public ProductDetailsDto? GetDetails(string productSymbol, string warehouseSymbol)
+        public ProductDetailsDto? GetDetails(string productSymbol)
         {
             using var sfera = _sessionFactory.Create();
-            var asortyment = sfera
+            {
+                var product = sfera
+                    .Asortymenty()
+                    .Dane
+                    .WyszukajPoSymbolu(productSymbol);
+                if (product is null)
+                    return null;
+                return new ProductDetailsDto(
+                    product.Id,
+                    product.Symbol,
+                    product.Nazwa,
+                    product.JednostkaMagazynowa?.PodstawowyKodKreskowy?.Kod,
+                    product.PozycjeCennika.Select(c => new ProductPriceDto(
+                        c.Cennik.Tytul,
+                        c.CenaNetto,
+                        c.CenaBrutto
+                    )).ToList(),
+                    product.StanyMagazynowe.Select(s => new ProductStockDto(
+                        s.Magazyn.Symbol,
+                        s.IloscDostepna,
+                        s.IloscZadysponowana
+                    )).ToList()
+                );
+            }
+        }
+        public ProductFromWarehouseDto? GetDetailsFromWarehouse(string productSymbol, string warehouseSymbol)
+        {
+            using var sfera = _sessionFactory.Create();
+            var product = sfera
                 .Asortymenty()
                 .Dane
                 .WyszukajPoSymbolu(productSymbol);
 
-            if (asortyment is null)
+            if (product is null)
                 return null;
 
-            var magazyn = sfera
+            var warehouse = sfera
                 .Magazyny()
                 .Dane
                 .WszystkieDostepne()
                 .FirstOrDefault(m => m.Symbol == warehouseSymbol);
 
-            if (magazyn is null)
+            if (warehouse is null)
                 return null;
 
-            var stan = asortyment.StanyMagazynowe.Where(m => m.Id == magazyn.Id).FirstOrDefault();
-            return new ProductDetailsDto(
-                asortyment.Id,
-                asortyment.Symbol,
-                asortyment.Nazwa,
-                asortyment.JednostkaMagazynowa?.PodstawowyKodKreskowy?.Kod,
-                magazyn.Symbol,
-                stan?.IloscDostepna ?? 0,
-                stan?.IloscZadysponowana ?? 0,
-                MapStockMovement(asortyment.Przyjecia, magazyn.Id),
-                MapStockMovement(asortyment.Wydania, magazyn.Id),
-                MapStockMovement(asortyment.Zwroty, magazyn.Id)
+            var stockLevel = product.StanyMagazynowe.Where(m => m.Id == warehouse.Id).FirstOrDefault();
+            return new ProductFromWarehouseDto(
+                product.Id,
+                product.Symbol,
+                product.Nazwa,
+                product.JednostkaMagazynowa?.PodstawowyKodKreskowy?.Kod,
+                warehouse.Symbol,
+                stockLevel?.IloscDostepna ?? 0,
+                stockLevel?.IloscZadysponowana ?? 0,
+                MapStockMovement(product.Przyjecia, warehouse.Id),
+                MapStockMovement(product.Wydania, warehouse.Id),
+                MapStockMovement(product.Zwroty, warehouse.Id)
             );
         }
         public IReadOnlyCollection<ProductBasicDto> GetAll()
@@ -85,5 +113,6 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 items
             );
         }
+
     }
 }

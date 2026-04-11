@@ -19,7 +19,7 @@ internal class Program
 
             using var host = builder.Build();
 
-            Console.WriteLine("Konfiguracja załadowana pomyślnie.");
+            Console.WriteLine("Configuration loaded successfully.");
 
             var handler = host.Services.GetRequiredService<GetWarehousesHandler>();
             var warehouses = handler.Handle(new GetWarehousesQuery());
@@ -32,7 +32,7 @@ internal class Program
         catch (Exception ex)
         {
             Console.ForegroundColor = ConsoleColor.Red;
-            Console.WriteLine("Błąd startu aplikacji:");
+            Console.WriteLine("Application startup failed:");
             Console.WriteLine(ex.Message);
             Console.ResetColor();
             Environment.Exit(1);

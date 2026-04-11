@@ -6,10 +6,6 @@
 		<Nullable>enable</Nullable>
 	</PropertyGroup>
 
-	<PropertyGroup>
-		<nexoSdkBinPath>C:\Users\PC\source\nexoSDK_59.1.1.9137\Bin\</nexoSdkBinPath>
-	</PropertyGroup>
-
 	<ItemGroup>
 		<Reference Include="InsERT.Moria.API">
 			<HintPath>$(nexoSdkBinPath)InsERT.Moria.API.dll</HintPath>

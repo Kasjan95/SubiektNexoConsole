@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <NexoSdkPath Condition="'$(NexoSdkPath)' == ''">$(NEXO_SDK_PATH)</NexoSdkPath>
+    <nexoSdkBinPath Condition="'$(nexoSdkBinPath)' == '' And '$(NexoSdkPath)' != ''">$(NexoSdkPath)\Bin\</nexoSdkBinPath>
+    <nexoSdkToolsPath Condition="'$(nexoSdkToolsPath)' == '' And '$(NexoSdkPath)' != ''">$(NexoSdkPath)\Narzedzia\</nexoSdkToolsPath>
+    <RequiresNexoSdk Condition="'$(MSBuildProjectName)' == 'SubiektNexoConnector.Api' Or '$(MSBuildProjectName)' == 'SubiektNexoConnector.Infrastructure' Or '$(MSBuildProjectName)' == 'SubiektNexoConnector.Console'">true</RequiresNexoSdk>
+  </PropertyGroup>
+
+  <Target Name="ValidateNexoSdkPath" BeforeTargets="ResolveReferences">
+    <Error
+      Condition="'$(RequiresNexoSdk)' == 'true' And '$(NexoSdkPath)' == ''"
+      Text="NexoSdkPath is not set. Set the NEXO_SDK_PATH environment variable or build with -p:NexoSdkPath=&quot;C:\path\to\nexoSDK&quot;." />
+    <Error
+      Condition="'$(RequiresNexoSdk)' == 'true' And '$(nexoSdkBinPath)' != '' And !Exists('$(nexoSdkBinPath)InsERT.Moria.API.dll')"
+      Text="InsERT nexo SDK binaries were not found at '$(nexoSdkBinPath)'. Check NEXO_SDK_PATH or pass -p:NexoSdkPath=&quot;C:\path\to\nexoSDK&quot;." />
+    <Error
+      Condition="'$(MSBuildProjectName)' == 'SubiektNexoConnector.Console' And '$(nexoSdkToolsPath)' != '' And !Exists('$(nexoSdkToolsPath)\Targets\SferaConsoleApp.targets')"
+      Text="InsERT nexo SDK tools were not found at '$(nexoSdkToolsPath)'. Check NEXO_SDK_PATH or pass -p:NexoSdkPath=&quot;C:\path\to\nexoSDK&quot;." />
+  </Target>
+</Project>

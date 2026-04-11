@@ -10,25 +10,25 @@ namespace SubiektNexoConnector.Infrastructure.Configuration
         public void Validate()
         {
             if (string.IsNullOrWhiteSpace(Database.SqlServer))
-                throw new ConfigurationException("Brak SqlServer.");
+                throw new ConfigurationException("Missing SqlServer.");
 
             if (string.IsNullOrWhiteSpace(Database.DatabaseName))
-                throw new ConfigurationException("Brak DatabaseName.");
+                throw new ConfigurationException("Missing DatabaseName.");
 
             if (Database.UseSqlAuth)
             {
                 if (string.IsNullOrWhiteSpace(Database.SqlUser))
-                    throw new ConfigurationException("UseSqlAuth=true, ale brak SqlUser.");
+                    throw new ConfigurationException("UseSqlAuth=true, but SqlUser is missing.");
 
                 if (string.IsNullOrWhiteSpace(Database.SqlPassword))
-                    throw new ConfigurationException("UseSqlAuth=true, ale brak SqlPassword.");
+                    throw new ConfigurationException("UseSqlAuth=true, but SqlPassword is missing.");
             }
 
             if (string.IsNullOrWhiteSpace(SystemLogin.NexoUser))
-                throw new ConfigurationException("Brak NexoUser.");
+                throw new ConfigurationException("Missing NexoUser.");
 
             if (string.IsNullOrWhiteSpace(SystemLogin.NexoPassword))
-                throw new ConfigurationException("Brak NexoPassword.");
+                throw new ConfigurationException("Missing NexoPassword.");
         }
     }
     public class DatabaseOptions
@@ -47,7 +47,7 @@ namespace SubiektNexoConnector.Infrastructure.Configuration
     public class ConfigurationException : Exception
     {
         public ConfigurationException(string message, string configFile = "appsettings.json")
-            : base($"Błędne dane w pliku {configFile}. Uzupełnij braki: {message}")
+            : base($"Invalid data in {configFile}. Fix the missing values: {message}")
         {
         }
     }

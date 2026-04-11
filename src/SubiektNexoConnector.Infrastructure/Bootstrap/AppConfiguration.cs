@@ -15,7 +15,7 @@ public static class AppConfiguration
             .Build();
 
         var config = configuration.GetSection("Nexo").Get<AppConfig>()
-            ?? throw new InvalidOperationException("Nie udało się wczytać konfiguracji. Sprawdź czy plik appsettings.json istnieje i ma poprawną strukturę JSON.");
+            ?? throw new InvalidOperationException("Could not load configuration. Check that appsettings.json exists and has a valid JSON structure.");
 
         config.Validate();
 
