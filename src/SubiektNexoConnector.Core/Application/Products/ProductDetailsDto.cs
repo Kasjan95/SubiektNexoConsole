@@ -6,6 +6,10 @@ namespace SubiektNexoConnector.Core.Application.Products
         string SKU,
         string Name,
         string? EAN,
+        ProductTypeDto Type,
+        bool IsActive,
+        int? SupplierLeadTimeDays,
+        IReadOnlyCollection<ProductSupplierDto> DefaultSuppliers,
         IReadOnlyCollection<ProductPriceDto> Prices,
         IReadOnlyCollection<ProductStockDto> Stocks
     );

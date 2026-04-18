@@ -28,6 +28,13 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                     product.Symbol,
                     product.Nazwa,
                     product.JednostkaMagazynowa?.PodstawowyKodKreskowy?.Kod,
+                    new ProductTypeDto(
+                        product.Rodzaj?.Symbol ?? string.Empty,
+                        product.Rodzaj?.Nazwa ?? string.Empty
+                    ),
+                    !product.IsInRecycleBin,
+                    product.LiczbaDniDoRealizacjiDostawcy,
+                    MapDefaultSuppliers(product.DaneAsortymentuDostawcyPodstawowego),
                     product.PozycjeCennika.Select(c => new ProductPriceDto(
                         c.Cennik.Tytul,
                         c.CenaNetto,
@@ -112,6 +119,24 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 items.Sum(x => x.Quantity),
                 items
             );
+        }
+
+        private static IReadOnlyCollection<ProductSupplierDto> MapDefaultSuppliers(dynamic? primarySupplierData)
+        {
+            if (primarySupplierData is null || primarySupplierData.Podmiot is null)
+                return [];
+
+            return
+            [
+                new ProductSupplierDto(
+                    primarySupplierData.Podmiot.Id,
+                    primarySupplierData.Podmiot.NazwaSkrocona ?? primarySupplierData.Podmiot.Nazwa,
+                    primarySupplierData.Podmiot.NIP,
+                    true,
+                    primarySupplierData.Symbol,
+                    primarySupplierData.Nazwa
+                )
+            ];
         }
 
     }
