@@ -1,5 +1,7 @@
 <Project>
   <PropertyGroup>
+    <!-- Prefer the documented env var; command-line -p:NexoSdkPath still wins as a global MSBuild property. -->
+    <NexoSdkPath Condition="'$(NEXO_SDK_PATH)' != ''">$(NEXO_SDK_PATH)</NexoSdkPath>
     <NexoSdkPath Condition="'$(NexoSdkPath)' == ''">$(NEXO_SDK_PATH)</NexoSdkPath>
     <nexoSdkBinPath Condition="'$(nexoSdkBinPath)' == '' And '$(NexoSdkPath)' != ''">$(NexoSdkPath)\Bin\</nexoSdkBinPath>
     <nexoSdkToolsPath Condition="'$(nexoSdkToolsPath)' == '' And '$(NexoSdkPath)' != ''">$(NexoSdkPath)\Narzedzia\</nexoSdkToolsPath>

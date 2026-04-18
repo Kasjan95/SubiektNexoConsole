@@ -61,7 +61,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             if (warehouse is null)
                 return null;
 
-            var stockLevel = product.StanyMagazynowe.Where(m => m.Id == warehouse.Id).FirstOrDefault();
+            var stockLevel = product.StanyMagazynowe.FirstOrDefault(m => m.Magazyn.Id == warehouse.Id);
             return new ProductFromWarehouseDto(
                 product.Id,
                 product.Symbol,

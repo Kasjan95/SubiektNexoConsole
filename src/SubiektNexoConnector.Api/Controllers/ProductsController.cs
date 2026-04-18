@@ -1,3 +1,4 @@
+using System.Net.Mime;
 using Microsoft.AspNetCore.Mvc;
 using SubiektNexoConnector.Core.Application.Products;
 
@@ -5,11 +6,13 @@ namespace SubiektNexoConnector.Api.Controllers;
 
 [ApiController]
 [Route("/[controller]")]
+[Produces(MediaTypeNames.Application.Json)]
 [Tags("Products")]
 public class ProductsController : ControllerBase
 {
     [HttpGet]
-    public ActionResult<IReadOnlyList<ProductBasicDto>> GetAll(
+    [ProducesResponseType(typeof(IReadOnlyCollection<ProductBasicDto>), StatusCodes.Status200OK)]
+    public ActionResult<IReadOnlyCollection<ProductBasicDto>> GetAll(
         [FromServices] GetProductsHandler handler)
     {
         var result = handler.Handle(new GetProductsQuery());
@@ -17,8 +20,10 @@ public class ProductsController : ControllerBase
     }
 
     [HttpGet("{sku}")]
+    [ProducesResponseType(typeof(ProductDetailsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
     public ActionResult<ProductDetailsDto> GetDetails(
-        String sku,
+        string sku,
         [FromServices] GetProductDetailsHandler handler)
     {
         var result = handler.Handle(new GetProductDetailsQuery(sku));

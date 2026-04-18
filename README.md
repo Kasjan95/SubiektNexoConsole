@@ -54,6 +54,26 @@ Copy-Item src\SubiektNexoConnector.Api\appsettings.template.json src\SubiektNexo
 
 `appsettings.json` is ignored by Git and should stay local, because it may contain database names and credentials.
 
+The API uses API key authentication by default. Keep the key out of committed files and provide it with an environment variable:
+
+```powershell
+$env:SUBIEKT_NEXO_CONNECTOR_API_KEY = "replace-with-a-local-secret"
+```
+
+Requests must include the key in the configured header:
+
+```http
+X-Api-Key: replace-with-a-local-secret
+```
+
+For local development only, API authentication can be disabled with:
+
+```json
+"Auth": {
+  "Mode": "None"
+}
+```
+
 ## Running Locally
 
 To run the API with connection settings from `appsettings.json`, pass the `--config` flag:
@@ -94,7 +114,7 @@ Running the API from source is intended for local development. Installing a pack
 
 - Unit tests for application handlers and mapping logic.
 - Integration tests for the nexo-backed infrastructure layer.
-- API authorization and scoped access.
+- Scoped API access, if the connector grows beyond a single integration key.
 - Structured logging.
 - Concurrency checks around nexo/Sfera session usage; add a simple semaphore if the SDK usage requires serialized access.
 - Background worker entry point for event-driven synchronization, for example Kafka or RabbitMQ.

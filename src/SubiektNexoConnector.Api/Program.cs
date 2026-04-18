@@ -1,10 +1,18 @@
+using SubiektNexoConnector.Api.Auth;
 using SubiektNexoConnector.Infrastructure;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var apiAuthenticationOptions = builder.Services.AddApiAuthentication(
+    builder.Configuration,
+    builder.Environment);
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddApiAuthenticationSwagger(apiAuthenticationOptions);
+});
 
 builder.Services.AddNexoInfrastructure(
     builder.Configuration,
@@ -23,7 +31,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-app.UseAuthorization();
-app.MapControllers();
+app.UseApiAuthentication(apiAuthenticationOptions);
+app.MapControllers().RequireApiAuthentication(apiAuthenticationOptions);
 
 app.Run();
