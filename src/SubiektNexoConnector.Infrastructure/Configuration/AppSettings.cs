@@ -15,13 +15,13 @@ namespace SubiektNexoConnector.Infrastructure.Configuration
             if (string.IsNullOrWhiteSpace(Database.DatabaseName))
                 throw new ConfigurationException("Missing DatabaseName.");
 
-            if (Database.UseSqlAuth)
+            if (!Database.UseWindowsAuth)
             {
                 if (string.IsNullOrWhiteSpace(Database.SqlUser))
-                    throw new ConfigurationException("UseSqlAuth=true, but SqlUser is missing.");
+                    throw new ConfigurationException("UseWindowsAuth=false, but SqlUser is missing.");
 
                 if (string.IsNullOrWhiteSpace(Database.SqlPassword))
-                    throw new ConfigurationException("UseSqlAuth=true, but SqlPassword is missing.");
+                    throw new ConfigurationException("UseWindowsAuth=false, but SqlPassword is missing.");
             }
 
             if (string.IsNullOrWhiteSpace(SystemLogin.NexoUser))
@@ -35,7 +35,7 @@ namespace SubiektNexoConnector.Infrastructure.Configuration
     {
         public string SqlServer { get; set; } = "";
         public string DatabaseName { get; set; } = "";
-        public bool UseSqlAuth { get; set; }
+        public bool UseWindowsAuth { get; set; } = true;
         public string SqlUser { get; set; } = "";
         public string SqlPassword { get; set; } = "";
     }

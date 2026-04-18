@@ -26,10 +26,11 @@ public static class DependencyInjection
             if (useConfig)
             {
                 Console.WriteLine("Using development database connection settings from configuration.");
+
                 return DanePolaczenia.Jawne(
                     appConfig.Database.SqlServer,
                     appConfig.Database.DatabaseName,
-                    appConfig.Database.UseSqlAuth,
+                    appConfig.Database.UseWindowsAuth,
                     appConfig.Database.SqlUser,
                     appConfig.Database.SqlPassword);
             }
