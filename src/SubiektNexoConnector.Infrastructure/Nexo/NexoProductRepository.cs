@@ -48,7 +48,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 );
             }
         }
-        public ProductFromWarehouseDto? GetDetailsFromWarehouse(string productSymbol, string warehouseSymbol)
+        public ProductFromWarehouseDto? GetDetailsFromWarehouse(string warehouseSymbol, string productSymbol)
         {
             using var sfera = _sessionFactory.Create();
             var product = sfera

@@ -29,7 +29,7 @@ public class WarehousesController : ControllerBase
         string sku,
         [FromServices] GetProductFromWarehouseHandler handler)
     {
-        var result = handler.Handle(new GetProductFromWarehouseQuery(sku, symbol));
+        var result = handler.Handle(new GetProductFromWarehouseQuery(symbol, sku));
 
         if (result is null)
             return NotFound();

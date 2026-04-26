@@ -12,7 +12,7 @@ namespace SubiektNexoConnector.Core.Application.Products
 
         public ProductFromWarehouseDto? Handle(GetProductFromWarehouseQuery query)
         {
-            return _repository.GetDetailsFromWarehouse(query.ProductSymbol, query.WarehouseSymbol);
+            return _repository.GetDetailsFromWarehouse(query.WarehouseSymbol, query.ProductSymbol);
         }
     }
 }

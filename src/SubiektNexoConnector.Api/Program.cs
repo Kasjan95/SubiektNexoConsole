@@ -76,3 +76,7 @@ finally
 {
     Log.CloseAndFlush();
 }
+public partial class Program
+{
+    // This is beeing used for integration testing with WebApplicationFactory<Program>
+}

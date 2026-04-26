@@ -12,32 +12,32 @@ namespace SubiektNexoConnector.Core.Tests.Application.Products
         {
             var repository = Substitute.For<IProductRepository>();
             ProductFromWarehouseDto expectedResult = GetProductFromWarehouseHandlerTests.CreateProductFromWarehouseDto();
-            repository.GetDetailsFromWarehouse(expectedResult.SKU, expectedResult.WarehouseSymbol).Returns(expectedResult);
+            repository.GetDetailsFromWarehouse(expectedResult.WarehouseSymbol, expectedResult.SKU).Returns(expectedResult);
             var handler = new GetProductFromWarehouseHandler(repository);
-            var query = new GetProductFromWarehouseQuery(expectedResult.SKU, expectedResult.WarehouseSymbol);
+            var query = new GetProductFromWarehouseQuery(expectedResult.WarehouseSymbol, expectedResult.SKU);
 
             var result = handler.Handle(query);
 
             Assert.Equal(expectedResult, result);
-            repository.Received(1).GetDetailsFromWarehouse(expectedResult.SKU, expectedResult.WarehouseSymbol);
+            repository.Received(1).GetDetailsFromWarehouse(expectedResult.WarehouseSymbol, expectedResult.SKU);
         }
         [Fact]
         public void Handle_ReturnsNull_WhenProductOrWarehouseDoesNotExist()
         {
             var repository = Substitute.For<IProductRepository>();
-            repository.GetDetailsFromWarehouse("NON-EXISTENT-SKU", "MAIN").Returns((ProductFromWarehouseDto?)null);
-            repository.GetDetailsFromWarehouse("PROD-001", "NON-EXISTENT-WAREHOUSE").Returns((ProductFromWarehouseDto?)null);
+            repository.GetDetailsFromWarehouse("MAIN", "NON-EXISTENT-SKU").Returns((ProductFromWarehouseDto?)null);
+            repository.GetDetailsFromWarehouse("NON-EXISTENT-WAREHOUSE", "PROD-001").Returns((ProductFromWarehouseDto?)null);
             var handler = new GetProductFromWarehouseHandler(repository);
-            var query1 = new GetProductFromWarehouseQuery("NON-EXISTENT-SKU", "MAIN");
-            var query2 = new GetProductFromWarehouseQuery("PROD-001", "NON-EXISTENT-WAREHOUSE");
+            var query1 = new GetProductFromWarehouseQuery("MAIN", "NON-EXISTENT-SKU");
+            var query2 = new GetProductFromWarehouseQuery("NON-EXISTENT-WAREHOUSE", "PROD-001");
 
             var result1 = handler.Handle(query1);
             var result2 = handler.Handle(query2);
 
             Assert.Null(result1);
             Assert.Null(result2);
-            repository.Received(1).GetDetailsFromWarehouse("NON-EXISTENT-SKU", "MAIN");
-            repository.Received(1).GetDetailsFromWarehouse("PROD-001", "NON-EXISTENT-WAREHOUSE");
+            repository.Received(1).GetDetailsFromWarehouse("MAIN", "NON-EXISTENT-SKU");
+            repository.Received(1).GetDetailsFromWarehouse("NON-EXISTENT-WAREHOUSE", "PROD-001");
         }
         private static ProductFromWarehouseDto CreateProductFromWarehouseDto(
             string productSymbol = "PROD-001",
