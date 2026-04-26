@@ -2,18 +2,33 @@
 
 Local REST adapter for InsERT nexo. The project exposes selected nexo resources through an ASP.NET Core API so they can be consumed from tools and integrations that do not use the nexo SDK directly.
 
-The connector is in active development. Current endpoints focus on products, warehouses, stock and price data.
+The connector is in active development. The current scope focuses on read scenarios around products, warehouses, stock and price data.
 
 ## Purpose
 
 InsERT nexo integrations are naturally built in .NET/C# through the nexo SDK and Sfera APIs. This project keeps that integration layer in C#, then exposes a small local HTTP API for other runtimes, scripts, automation tools or local AI-assisted workflows.
+
+## Architecture Notes
+
+Architectural decisions, domain trade-offs and future directions are documented in Polish here:
+
+- [docs/decyzje-architektoniczne.md](docs/decyzje-architektoniczne.md)
+
+The document also includes a short English summary.
+
+## Current API Surface
+
+- `GET /products`
+- `GET /products/{sku}`
+- `GET /warehouses`
+- `GET /warehouses/{symbol}/products/{sku}`
 
 ## Solution Structure
 
 - `SubiektNexoConnector.Api` - ASP.NET Core REST API and Swagger UI.
 - `SubiektNexoConnector.Core` - application handlers, repository interfaces and DTOs.
 - `SubiektNexoConnector.Infrastructure` - nexo SDK/Sfera integration and configuration binding.
-- `SubiektNexoConnector.Console` - additional entry point for quick local checks. It may later evolve into a background worker, for example for consuming Kafka or RabbitMQ events.
+- `SubiektNexoConnector.Console` - additional local entry point for quick checks and a potential starting point for a future worker or message-driven process.
 
 ## Requirements
 
@@ -74,6 +89,8 @@ For local development only, API authentication can be disabled with:
 }
 ```
 
+The template configuration also includes Serilog setup with console output and a Seq sink at `http://localhost:5341`.
+
 ## Running Locally
 
 To run the API with connection settings from `appsettings.json`, pass the `--config` flag:
@@ -112,9 +129,9 @@ Running the API from source is intended for local development. Installing a pack
 
 ## Roadmap
 
-- Unit tests for application handlers and mapping logic.
-- Integration tests for the nexo-backed infrastructure layer.
-- Scoped API access, if the connector grows beyond a single integration key.
-- Structured logging.
-- Concurrency checks around nexo/Sfera session usage; add a simple semaphore if the SDK usage requires serialized access.
-- Background worker entry point for event-driven synchronization, for example Kafka or RabbitMQ.
+- Cache for expensive read scenarios and slower SDK-backed endpoints.
+- Separate worker for refresh jobs, exports and future asynchronous flows.
+- More resources and eventual write-oriented scenarios beyond the current `GET` endpoints.
+- Better API shaping through filtering, pagination and lighter response models.
+- Deeper observability around integration flow, including `live` vs `cache` responses.
+- Concurrency checks around nexo/Sfera session usage if the SDK requires stricter serialization.
