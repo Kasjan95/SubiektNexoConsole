@@ -6,5 +6,7 @@ namespace SubiektNexoConnector.Core.Application.Products
         IReadOnlyCollection<ProductBasicDto> GetAll();
         ProductFromWarehouseDto? GetDetailsFromWarehouse(string warehouseSymbol, string productSymbol);
         ProductDetailsDto? GetDetails(string ProductSymbol);
+
+        string Create(CreateProductCommand command);
     }
 }

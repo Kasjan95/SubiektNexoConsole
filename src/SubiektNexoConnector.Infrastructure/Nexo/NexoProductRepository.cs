@@ -3,6 +3,7 @@ using InsERT.Moria.Sfera;
 using InsERT.Mox.DataAccess.EntityFramework;
 using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Infrastructure.Abstractions;
+using System.Text;
 
 namespace SubiektNexoConnector.Infrastructure.Nexo
 {
@@ -100,6 +101,43 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                  ))
                 .ToList();
         }
+        public string Create(CreateProductCommand command)
+        {
+            using var sfera = _sessionFactory.Create();
+            using var product = sfera.Asortymenty().Utworz();
+
+            product.WypelnijNaPodstawieSzablonu(sfera.SzablonyAsortymentu().DaneDomyslne.Towar);
+            product.Dane.Nazwa = command.Name;
+
+            if (!string.IsNullOrWhiteSpace(command.SKU))
+                product.Dane.Symbol = command.SKU;
+            if (!string.IsNullOrWhiteSpace(command.EAN))
+            {
+                var primaryUnit = product.Dane.PodstawowaJednostkaMiaryAsortymentu;
+                KodKreskowy productEan = new KodKreskowy { Kod = command.EAN.Trim() };
+
+                primaryUnit.KodyKreskowe.Add(productEan);
+                primaryUnit.PodstawowyKodKreskowy = productEan;
+            }
+
+            if (!product.Zapisz())
+            {
+                StringBuilder messageBuilder = new StringBuilder("Blad dodawania produktu:");
+                foreach (KomunikatWalidacji error in product.PobierzKomunikatyBledow())
+                {
+                    var fieldNames = error.NazwyPol is null || !error.NazwyPol.Any()
+                        ? "Nieznane pole"
+                        : string.Join(", ", error.NazwyPol);
+
+                    messageBuilder.AppendLine();
+                    messageBuilder.Append($"{fieldNames}: {error.Tresc}");
+                }
+
+                throw new InvalidOperationException(messageBuilder.ToString());
+            }
+
+            return product.Dane.Symbol;
+        }
 
         private static StockMovementDto MapStockMovement(IEnumerable<dynamic> movements, int warehouseId)
         {
@@ -138,6 +176,5 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 )
             ];
         }
-
     }
 }

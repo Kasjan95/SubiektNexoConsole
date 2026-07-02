@@ -46,6 +46,7 @@ public static class DependencyInjection
         services.AddTransient<IProductRepository, NexoProductRepository>();
         services.AddTransient<IWarehouseRepository, NexoWarehouseRepository>();
 
+        services.AddTransient<CreateProductHandler>();
         services.AddTransient<GetProductsHandler>();
         services.AddTransient<GetProductDetailsHandler>();
         services.AddTransient<GetProductFromWarehouseHandler>();

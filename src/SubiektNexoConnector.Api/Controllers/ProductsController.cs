@@ -10,6 +10,27 @@ namespace SubiektNexoConnector.Api.Controllers;
 [Tags("Products")]
 public class ProductsController : ControllerBase
 {
+    [HttpPost]
+    [ProducesResponseType(typeof(CreateProductResponseDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public ActionResult<CreateProductResponseDto> Create(
+        [FromBody] CreateProductRequestDto request,
+        [FromServices] CreateProductHandler handler)
+    {
+        var command = new CreateProductCommand(
+            request.Name,
+            request.SKU,
+            request.EAN
+        );
+
+        var sku = handler.Handle(command);
+
+        return CreatedAtAction(
+            nameof(GetDetails),
+            new { sku },
+            new CreateProductResponseDto(sku));
+    }
+
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyCollection<ProductBasicDto>), StatusCodes.Status200OK)]
     public ActionResult<IReadOnlyCollection<ProductBasicDto>> GetAll(

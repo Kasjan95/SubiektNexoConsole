@@ -30,17 +30,9 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
             httpContext.Request.Method,
             httpContext.Request.Path);
 
-        var problemDetails = new ProblemDetails
-        {
-            Status = StatusCodes.Status500InternalServerError,
-            Title = "Internal Server Error",
-            Detail = _environment.IsDevelopment()
-                ? exception.Message
-                : "The server encountered an unexpected error.",
-            Instance = httpContext.Request.Path
-        };
+        var problemDetails = CreateProblemDetails(httpContext, exception);
 
-        httpContext.Response.StatusCode = problemDetails.Status.Value;
+        httpContext.Response.StatusCode = problemDetails.Status!.Value;
 
         var wasWritten = await _problemDetailsService.TryWriteAsync(new ProblemDetailsContext
         {
@@ -55,5 +47,29 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
         await httpContext.Response.WriteAsJsonAsync(problemDetails, cancellationToken);
 
         return true;
+    }
+
+    private ProblemDetails CreateProblemDetails(HttpContext httpContext, Exception exception)
+    {
+        if (exception is InvalidOperationException)
+        {
+            return new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Bad Request",
+                Detail = exception.Message,
+                Instance = httpContext.Request.Path
+            };
+        }
+
+        return new ProblemDetails
+        {
+            Status = StatusCodes.Status500InternalServerError,
+            Title = "Internal Server Error",
+            Detail = _environment.IsDevelopment()
+                ? exception.Message
+                : "The server encountered an unexpected error.",
+            Instance = httpContext.Request.Path
+        };
     }
 }
