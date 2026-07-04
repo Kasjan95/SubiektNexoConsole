@@ -10,7 +10,40 @@ namespace SubiektNexoConnector.Api.Tests.ErrorHandling;
 public class GlobalExceptionHandlerTests
 {
     [Fact]
-    public async Task TryHandleAsync_ReturnsGenericProblemDetailsOutsideDevelopment()
+    public async Task TryHandleAsync_ReturnsBadRequestProblemDetails_ForInvalidOperationException()
+    {
+        var environment = Substitute.For<IHostEnvironment>();
+        environment.EnvironmentName.Returns(Environments.Production);
+
+        var logger = Substitute.For<ILogger<GlobalExceptionHandler>>();
+        var problemDetailsService = Substitute.For<IProblemDetailsService>();
+        ProblemDetailsContext? capturedContext = null;
+
+        problemDetailsService
+            .TryWriteAsync(Arg.Do<ProblemDetailsContext>(context => capturedContext = context))
+            .Returns(new ValueTask<bool>(true));
+
+        var handler = new GlobalExceptionHandler(environment, logger, problemDetailsService);
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Method = HttpMethods.Post;
+        httpContext.Request.Path = "/products";
+
+        var handled = await handler.TryHandleAsync(
+            httpContext,
+            new InvalidOperationException("Product already exists."),
+            CancellationToken.None);
+
+        Assert.True(handled);
+        Assert.Equal(StatusCodes.Status400BadRequest, httpContext.Response.StatusCode);
+        Assert.NotNull(capturedContext);
+        Assert.Equal(StatusCodes.Status400BadRequest, capturedContext!.ProblemDetails.Status);
+        Assert.Equal("Bad Request", capturedContext.ProblemDetails.Title);
+        Assert.Equal("Product already exists.", capturedContext.ProblemDetails.Detail);
+        Assert.Equal("/products", capturedContext.ProblemDetails.Instance);
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_ReturnsGenericProblemDetailsOutsideDevelopment_ForUnexpectedException()
     {
         var environment = Substitute.For<IHostEnvironment>();
         environment.EnvironmentName.Returns(Environments.Production);
@@ -30,7 +63,7 @@ public class GlobalExceptionHandlerTests
 
         var handled = await handler.TryHandleAsync(
             httpContext,
-            new InvalidOperationException("Sensitive failure details."),
+            new Exception("Sensitive failure details."),
             CancellationToken.None);
 
         Assert.True(handled);
@@ -43,7 +76,7 @@ public class GlobalExceptionHandlerTests
     }
 
     [Fact]
-    public async Task TryHandleAsync_ReturnsExceptionMessageInDevelopment()
+    public async Task TryHandleAsync_ReturnsExceptionMessageInDevelopment_ForUnexpectedException()
     {
         var environment = Substitute.For<IHostEnvironment>();
         environment.EnvironmentName.Returns(Environments.Development);
@@ -63,11 +96,12 @@ public class GlobalExceptionHandlerTests
 
         var handled = await handler.TryHandleAsync(
             httpContext,
-            new InvalidOperationException("Development failure details."),
+            new Exception("Development failure details."),
             CancellationToken.None);
 
         Assert.True(handled);
         Assert.NotNull(capturedContext);
-        Assert.Equal("Development failure details.", capturedContext!.ProblemDetails.Detail);
+        Assert.Equal(StatusCodes.Status500InternalServerError, capturedContext!.ProblemDetails.Status);
+        Assert.Equal("Development failure details.", capturedContext.ProblemDetails.Detail);
     }
 }

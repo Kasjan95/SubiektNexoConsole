@@ -1,15 +1,19 @@
-﻿using FluentAssertions;
+using FluentAssertions;
+using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using SubiektNexoConnector.Api.Tests.TestDataBuilders;
 using SubiektNexoConnector.Core.Application.Products;
 using System.Net;
+using Microsoft.AspNetCore.Http;
 using System.Net.Http.Json;
 
 namespace SubiektNexoConnector.Api.Tests.Integration;
+
 public class ProductsHttpTests : IClassFixture<TestApiFactory>
 {
     private readonly HttpClient _client;
     private readonly TestApiFactory _factory;
+
     public ProductsHttpTests(TestApiFactory factory)
     {
         _factory = factory;
@@ -45,7 +49,8 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
-    public async Task GetProductDetails_Returns200AndJsonBody() {
+    public async Task GetProductDetails_Returns200AndJsonBody()
+    {
         var productDetails = ProductDetailsDtoTestData.CreateProductDetailsDto();
         _factory.Products.GetDetails(productDetails.SKU).Returns(productDetails);
 
@@ -54,5 +59,68 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var body = await response.Content.ReadFromJsonAsync<ProductDetailsDto>();
         body.Should().BeEquivalentTo(productDetails);
+    }
+
+    [Fact]
+    public async Task CreateProduct_Returns201LocationAndJsonBody()
+    {
+        var request = new CreateProductRequestDto(
+            "Test product",
+            "ABC-123",
+            "5901234567890");
+
+        _factory.Products
+            .Create(Arg.Is<CreateProductCommand>(command =>
+                command.Name == request.Name &&
+                command.SKU == request.SKU &&
+                command.EAN == request.EAN))
+            .Returns("ABC-123");
+
+        var response = await _client.PostAsJsonAsync("/products", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        response.Headers.Location.Should().NotBeNull(); 
+        response.Headers.Location!.AbsolutePath.Should().Be("/Products/ABC-123");
+
+        var body = await response.Content.ReadFromJsonAsync<CreateProductResponseDto>();
+        body.Should().BeEquivalentTo(new CreateProductResponseDto("ABC-123"));
+    }
+
+    [Fact]
+    public async Task CreateProduct_Returns400ProblemDetails_WhenCreationFails()
+    {
+        var request = new CreateProductRequestDto(
+            "Test product",
+            "ABC-123",
+            "5901234567890");
+
+        _factory.Products
+            .Create(Arg.Any<CreateProductCommand>())
+            .Returns(_ => throw new InvalidOperationException("Product already exists."));
+
+        var response = await _client.PostAsJsonAsync("/products", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var body = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        body.Should().NotBeNull();
+        body!.Status.Should().Be(StatusCodes.Status400BadRequest);
+        body.Title.Should().Be("Bad Request");
+        body.Detail.Should().Be("Product already exists.");
+        body.Instance.Should().Be("/products");
+    }
+
+    [Fact]
+    public async Task CreateProduct_Returns400_WhenRequestIsInvalid()
+    {
+        var response = await _client.PostAsJsonAsync(
+            "/products",
+            new
+            {
+                SKU = "ABC-123",
+                EAN = "5901234567890"
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 }
