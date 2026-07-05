@@ -1,4 +1,5 @@
 using InsERT.Moria.ModelDanych;
+using InsERT.Moria.Narzedzia.EPP.Typy;
 using InsERT.Moria.Sfera;
 using InsERT.Mox.DataAccess.EntityFramework;
 using SubiektNexoConnector.Core.Application.Products;
@@ -137,6 +138,33 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             }
 
             return product.Dane.Symbol;
+        }
+        public DeleteProductResult Delete(DeleteProductCommand command)
+        {
+            using var sfera = _sessionFactory.Create();
+            var product = sfera.Asortymenty().Dane.WyszukajPoSymbolu(command.SKU);
+            if (product == null)
+            {
+                return DeleteProductResult.NotFound;
+            }
+
+            var productBo = sfera.Asortymenty().Znajdz(product);
+            if (productBo == null)
+            {
+                throw new ProductDeletionFailedException("Nie znaleziono obiektu biznesowego dla produktu.");
+            }
+
+            if (!productBo.MoznaUsunac)
+            {
+                return DeleteProductResult.Blocked;
+            }
+
+            if (!productBo.Usun())
+            {
+                throw new ProductDeletionFailedException("Usuwanie produktu nie powiodlo sie.");
+            }
+
+            return DeleteProductResult.Deleted;
         }
 
         private static StockMovementDto MapStockMovement(IEnumerable<dynamic> movements, int warehouseId)

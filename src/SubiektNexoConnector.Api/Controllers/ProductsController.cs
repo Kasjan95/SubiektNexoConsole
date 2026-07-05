@@ -54,4 +54,29 @@ public class ProductsController : ControllerBase
 
         return Ok(result);
     }
+
+    [HttpDelete("{sku}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
+    public IActionResult Delete(
+        string sku,
+        [FromServices] DeleteProductHandler handler)
+    {
+        var result = handler.Handle(new DeleteProductCommand(sku));
+
+        if (result == DeleteProductResult.NotFound)
+            return NotFound();
+        if (result == DeleteProductResult.Blocked)
+        {
+            return Conflict(new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Product cannot be deleted",
+                Detail = "Product was used in documents and cannot be removed."
+            });
+        }
+
+        return NoContent();
+    }
 }

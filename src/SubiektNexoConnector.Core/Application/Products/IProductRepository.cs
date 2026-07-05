@@ -8,5 +8,6 @@ namespace SubiektNexoConnector.Core.Application.Products
         ProductDetailsDto? GetDetails(string ProductSymbol);
 
         string Create(CreateProductCommand command);
+        DeleteProductResult Delete(DeleteProductCommand command);
     }
 }

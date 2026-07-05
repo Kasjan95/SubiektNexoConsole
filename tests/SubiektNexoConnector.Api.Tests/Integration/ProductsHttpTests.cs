@@ -123,4 +123,46 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
+
+    [Fact]
+    public async Task DeleteProduct_Returns204_WhenProductWasDeleted()
+    {
+        _factory.Products
+            .Delete(Arg.Is<DeleteProductCommand>(command => command.SKU == "ABC-123"))
+            .Returns(DeleteProductResult.Deleted);
+
+        var response = await _client.DeleteAsync("/products/ABC-123");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+    }
+
+    [Fact]
+    public async Task DeleteProduct_Returns404_WhenProductWasNotFound()
+    {
+        _factory.Products
+            .Delete(Arg.Is<DeleteProductCommand>(command => command.SKU == "missing"))
+            .Returns(DeleteProductResult.NotFound);
+
+        var response = await _client.DeleteAsync("/products/missing");
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task DeleteProduct_Returns409ProblemDetails_WhenProductIsBlocked()
+    {
+        _factory.Products
+            .Delete(Arg.Is<DeleteProductCommand>(command => command.SKU == "ABC-123"))
+            .Returns(DeleteProductResult.Blocked);
+
+        var response = await _client.DeleteAsync("/products/ABC-123");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
+
+        var body = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        body.Should().NotBeNull();
+        body!.Status.Should().Be(StatusCodes.Status409Conflict);
+        body.Title.Should().Be("Product cannot be deleted");
+        body.Detail.Should().Be("Product was used in documents and cannot be removed.");
+    }
 }
