@@ -55,6 +55,28 @@ public class ProductsController : ControllerBase
         return Ok(result);
     }
 
+    [HttpPatch("{sku}")]
+    [ProducesResponseType(typeof(PatchProductResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<PatchProductResponseDto> Patch(
+        string sku,
+        [FromBody] PatchProductRequestDto request,
+        [FromServices] PatchProductHandler handler)
+    {
+        var command = new PatchProductCommand(
+            sku,
+            request.Name,
+            request.SKU,
+            request.EAN);
+
+        var updatedSku = handler.Handle(command);
+        if (updatedSku is null)
+            return NotFound();
+
+        return Ok(new PatchProductResponseDto(updatedSku));
+    }
+
     [HttpDelete("{sku}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

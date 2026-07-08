@@ -1,3 +1,4 @@
+using InsERT.Moria.Asortymenty;
 using InsERT.Moria.ModelDanych;
 using InsERT.Moria.Narzedzia.EPP.Typy;
 using InsERT.Moria.Sfera;
@@ -123,21 +124,50 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
 
             if (!product.Zapisz())
             {
-                StringBuilder messageBuilder = new StringBuilder("Blad dodawania produktu:");
-                foreach (KomunikatWalidacji error in product.PobierzKomunikatyBledow())
-                {
-                    var fieldNames = error.NazwyPol is null || !error.NazwyPol.Any()
-                        ? "Nieznane pole"
-                        : string.Join(", ", error.NazwyPol);
-
-                    messageBuilder.AppendLine();
-                    messageBuilder.Append($"{fieldNames}: {error.Tresc}");
-                }
-
-                throw new InvalidOperationException(messageBuilder.ToString());
+                throw new InvalidOperationException(BuildValidationMessage(
+                    "Blad dodawania produktu:",
+                    product.PobierzKomunikatyBledow()));
             }
 
             return product.Dane.Symbol;
+        }
+        public string? Patch(PatchProductCommand command)
+        {
+            using var sfera = _sessionFactory.Create();
+            var product = sfera.Asortymenty().Dane.WyszukajPoSymbolu(command.ProductSku);
+            if (product is null)
+                return null;
+
+            using var productBo = sfera.Asortymenty().Znajdz(product);
+            if (productBo is null)
+                throw new ProductUpdateFailedException("Nie znaleziono obiektu biznesowego dla produktu.");
+            var isLocked = productBo.Zablokuj();
+
+            try
+            {
+                if (command.Name.HasValue)
+                    productBo.Dane.Nazwa = command.Name.Value!;
+
+                if (command.SKU.HasValue)
+                    productBo.Dane.Symbol = command.SKU.Value!;
+
+                if (command.EAN.HasValue)
+                    UpdateProductEan(productBo, command.EAN.Value);
+
+                if (!productBo.Zapisz())
+                {
+                    throw new InvalidOperationException(BuildValidationMessage(
+                        "Blad aktualizacji produktu:",
+                        productBo.PobierzKomunikatyBledow()));
+                }
+
+                return productBo.Dane.Symbol;
+            }
+            finally
+            {
+                if (isLocked)
+                    productBo.Odblokuj();
+            }
         }
         public DeleteProductResult Delete(DeleteProductCommand command)
         {
@@ -148,7 +178,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 return DeleteProductResult.NotFound;
             }
 
-            var productBo = sfera.Asortymenty().Znajdz(product);
+            using var productBo = sfera.Asortymenty().Znajdz(product);
             if (productBo == null)
             {
                 throw new ProductDeletionFailedException("Nie znaleziono obiektu biznesowego dla produktu.");
@@ -165,6 +195,47 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             }
 
             return DeleteProductResult.Deleted;
+        }
+
+        private static void UpdateProductEan(IAsortyment productBo, string? ean)
+        {
+            JednostkaMiaryAsortymentu primaryUnit = productBo.Dane.PodstawowaJednostkaMiaryAsortymentu;
+
+            if (primaryUnit is null)
+                throw new ProductUpdateFailedException("Brak podstawowej jednostki miary produktu.");
+
+            var currentPrimaryCode = primaryUnit.PodstawowyKodKreskowy;
+
+            if (currentPrimaryCode is not null)
+            {
+                primaryUnit.PodstawowyKodKreskowy = null;
+                primaryUnit.KodyKreskowe.Remove(currentPrimaryCode);
+            }
+
+            if (ean is null)
+                return;
+
+            KodKreskowy productEan = new KodKreskowy { Kod = ean };
+            primaryUnit.KodyKreskowe.Add(productEan);
+            primaryUnit.PodstawowyKodKreskowy = productEan;
+        }
+
+        private static string BuildValidationMessage(
+            string messagePrefix,
+            IEnumerable<KomunikatWalidacji> errors)
+        {
+            StringBuilder messageBuilder = new StringBuilder(messagePrefix);
+            foreach (var error in errors)
+            {
+                var fieldNames = error.NazwyPol is null || !error.NazwyPol.Any()
+                    ? "Nieznane pole"
+                    : string.Join(", ", error.NazwyPol);
+
+                messageBuilder.AppendLine();
+                messageBuilder.Append($"{fieldNames}: {error.Tresc}");
+            }
+
+            return messageBuilder.ToString();
         }
 
         private static StockMovementDto MapStockMovement(IEnumerable<dynamic> movements, int warehouseId)

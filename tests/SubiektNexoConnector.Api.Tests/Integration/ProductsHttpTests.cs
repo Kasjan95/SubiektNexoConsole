@@ -125,6 +125,68 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
+    public async Task PatchProduct_Returns200AndJsonBody_WhenProductWasUpdated()
+    {
+        var request = new PatchProductRequestDto(
+            new("Updated product"),
+            new("NEW-ABC-123"),
+            new("5901234567890"));
+
+        _factory.Products
+            .Patch(Arg.Is<PatchProductCommand>(command =>
+                command.ProductSku == "ABC-123"
+                && command.Name.HasValue
+                && command.Name.Value == "Updated product"
+                && command.SKU.HasValue
+                && command.SKU.Value == "NEW-ABC-123"
+                && command.EAN.HasValue
+                && command.EAN.Value == "5901234567890"))
+            .Returns("NEW-ABC-123");
+
+        var response = await _client.PatchAsJsonAsync("/products/ABC-123", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var body = await response.Content.ReadFromJsonAsync<PatchProductResponseDto>();
+        body.Should().BeEquivalentTo(new PatchProductResponseDto("NEW-ABC-123"));
+    }
+
+    [Fact]
+    public async Task PatchProduct_Returns404_WhenProductWasNotFound()
+    {
+        var request = new PatchProductRequestDto(
+            new("Updated product"),
+            default,
+            default);
+
+        _factory.Products
+            .Patch(Arg.Any<PatchProductCommand>())
+            .Returns((string?)null);
+
+        var response = await _client.PatchAsJsonAsync("/products/missing", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    [Fact]
+    public async Task PatchProduct_Returns400_WhenNameWasProvidedAsNull()
+    {
+        var response = await _client.PatchAsJsonAsync(
+            "/products/ABC-123",
+            new
+            {
+                Name = (string?)null
+            });
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+
+        var body = await response.Content.ReadFromJsonAsync<ProblemDetails>();
+        body.Should().NotBeNull();
+        body!.Status.Should().Be(StatusCodes.Status400BadRequest);
+        body.Detail.Should().Be("Name cannot be null.");
+    }
+
+    [Fact]
     public async Task DeleteProduct_Returns204_WhenProductWasDeleted()
     {
         _factory.Products

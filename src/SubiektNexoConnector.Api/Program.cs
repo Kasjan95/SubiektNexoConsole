@@ -1,5 +1,6 @@
 using SubiektNexoConnector.Api.Auth;
 using SubiektNexoConnector.Api.ErrorHandling;
+using SubiektNexoConnector.Api.Swagger;
 using SubiektNexoConnector.Infrastructure;
 using Serilog;
 
@@ -34,6 +35,7 @@ try
     builder.Services.AddSwaggerGen(options =>
     {
         options.AddApiAuthenticationSwagger(apiAuthenticationOptions);
+        options.SchemaFilter<OptionalSchemaFilter>();
     });
 
     builder.Services.AddNexoInfrastructure(
