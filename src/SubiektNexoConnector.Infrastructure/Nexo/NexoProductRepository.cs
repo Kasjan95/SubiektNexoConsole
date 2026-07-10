@@ -1,8 +1,6 @@
 using InsERT.Moria.Asortymenty;
 using InsERT.Moria.ModelDanych;
-using InsERT.Moria.Narzedzia.EPP.Typy;
 using InsERT.Moria.Sfera;
-using InsERT.Mox.DataAccess.EntityFramework;
 using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Infrastructure.Abstractions;
 using System.Text;
@@ -92,7 +90,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             return sfera
                 .Asortymenty()
                 .Dane
-                .WszystkieDostepne()
+                .Wszystkie()
                 .ToList()
                 .Select(
                 a => new ProductBasicDto(
