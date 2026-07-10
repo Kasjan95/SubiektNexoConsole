@@ -3,6 +3,8 @@ using SubiektNexoConnector.Api.ErrorHandling;
 using SubiektNexoConnector.Api.Swagger;
 using SubiektNexoConnector.Infrastructure;
 using Serilog;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -30,7 +32,12 @@ try
         };
     });
 
-    builder.Services.AddControllers();
+    builder.Services
+        .AddControllers()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter(JsonNamingPolicy.CamelCase));
+        });
     builder.Services.AddEndpointsApiExplorer();
     builder.Services.AddSwaggerGen(options =>
     {

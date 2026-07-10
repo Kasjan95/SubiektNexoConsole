@@ -2,6 +2,8 @@ using InsERT.Moria.Sfera;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SubiektNexoConnector.Core.Application.Parties.GetParties;
+using SubiektNexoConnector.Core.Application.Parties.Shared;
 using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Core.Application.Warehouses;
 using SubiektNexoConnector.Infrastructure.Abstractions;
@@ -45,6 +47,7 @@ public static class DependencyInjection
 
         services.AddTransient<IProductRepository, NexoProductRepository>();
         services.AddTransient<IWarehouseRepository, NexoWarehouseRepository>();
+        services.AddTransient<IPartyRepository, NexoPartyRepository>();
 
         services.AddTransient<CreateProductHandler>();
         services.AddTransient<PatchProductHandler>();
@@ -53,6 +56,7 @@ public static class DependencyInjection
         services.AddTransient<GetProductDetailsHandler>();
         services.AddTransient<GetProductFromWarehouseHandler>();
         services.AddTransient<GetWarehousesHandler>();
+        services.AddTransient<GetPartiesHandler>();
 
         return services;
     }

@@ -366,3 +366,4 @@ FodyWeavers.xsd
 /src/SubiektNexoConnector.Console/appsettings.json
 /src/SubiektNexoConnector.Api/appsettings.json
 /tmp/nexo-chm/html
+/.dotnet
