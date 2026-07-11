@@ -28,7 +28,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
             new ProductBasicDto(1, "ABC-123", "Test product", "5901234567890")
         };
 
-        _factory.Products.GetAll().Returns(products);
+        _factory.Products.GetAll(Arg.Any<GetProductsQuery>()).Returns(products);
 
         var response = await _client.GetAsync("/products");
 

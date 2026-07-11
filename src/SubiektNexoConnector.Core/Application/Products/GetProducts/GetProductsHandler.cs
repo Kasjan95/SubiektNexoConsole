@@ -12,7 +12,7 @@ namespace SubiektNexoConnector.Core.Application.Products
 
         public IReadOnlyCollection<ProductBasicDto> Handle(GetProductsQuery query)
         {
-            return _repository.GetAll();
+            return _repository.GetAll(query);
         }
     }
 }

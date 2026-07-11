@@ -34,9 +34,17 @@ public class ProductsController : ControllerBase
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyCollection<ProductBasicDto>), StatusCodes.Status200OK)]
     public ActionResult<IReadOnlyCollection<ProductBasicDto>> GetAll(
-        [FromServices] GetProductsHandler handler)
+        [FromServices] GetProductsHandler handler,
+        [FromQuery] string? search = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 100)
     {
-        var result = handler.Handle(new GetProductsQuery());
+        var result = handler.Handle(new GetProductsQuery
+        {
+            Search = search,
+            Page = page,
+            PageSize = pageSize
+        });
         return Ok(result);
     }
 

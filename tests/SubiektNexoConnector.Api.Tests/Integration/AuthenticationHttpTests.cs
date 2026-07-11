@@ -42,7 +42,7 @@ public class AuthenticationHttpTests : IClassFixture<TestApiFactory>
     [Fact]
     public async Task GetProducts_Returns200_WhenApiKeyHeaderIsValid()
     {
-        _factory.Products.GetAll().Returns(Array.Empty<ProductBasicDto>());
+        _factory.Products.GetAll(Arg.Any<GetProductsQuery>()).Returns(Array.Empty<ProductBasicDto>());
 
         using var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add(

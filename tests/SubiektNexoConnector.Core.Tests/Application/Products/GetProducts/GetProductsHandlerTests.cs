@@ -14,29 +14,29 @@ namespace SubiektNexoConnector.Core.Tests.Application.Products
                 new ProductBasicDto(1, "Prod.1.SKU", "Product 1 Name" ,"1234567890"),
                 new ProductBasicDto(2, "Prod.2.SKU", "Product 2 Name" , null)
             };
-            repository.GetAll().Returns(expectedProducts);
-            var handler = new GetProductsHandler(repository);
             var query = new GetProductsQuery();
+            repository.GetAll(query).Returns(expectedProducts);
+            var handler = new GetProductsHandler(repository);
 
             var result = handler.Handle(query);
 
             Assert.Equal(expectedProducts, result);
             Assert.Contains(result, p => p.SKU == "Prod.2.SKU" && p.EAN == null);
-            repository.Received(1).GetAll();
+            repository.Received(1).GetAll(query);
         }
 
         [Fact]
         public void Handle_ReturnsEmptyCollection_WhenRepositoryIsEmpty()
         {
             var repository = Substitute.For<IProductRepository>();
-            repository.GetAll().Returns(new List<ProductBasicDto>());
-            var handler = new GetProductsHandler(repository);
             var query = new GetProductsQuery();
+            repository.GetAll(query).Returns(new List<ProductBasicDto>());
+            var handler = new GetProductsHandler(repository);
 
             var result = handler.Handle(query);
 
             Assert.Empty(result);
-            repository.Received(1).GetAll();
+            repository.Received(1).GetAll(query);
         }
     }
 }

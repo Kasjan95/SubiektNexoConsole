@@ -14,5 +14,6 @@ namespace SubiektNexoConnector.Core.Application.Parties.GetParties
         public string? Search { get; init; }
         public int Page { get; init; } = 1;
         public int PageSize { get; init; } = 100;
+
     }
 }

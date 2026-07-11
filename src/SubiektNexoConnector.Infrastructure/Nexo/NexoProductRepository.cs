@@ -3,6 +3,7 @@ using InsERT.Moria.ModelDanych;
 using InsERT.Moria.Sfera;
 using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Infrastructure.Abstractions;
+using SubiektNexoConnector.Infrastructure.Nexo.Common;
 using System.Text;
 
 namespace SubiektNexoConnector.Infrastructure.Nexo
@@ -83,14 +84,20 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 MapStockMovement(product.Zwroty, warehouse.Id)
             );
         }
-        public IReadOnlyCollection<ProductBasicDto> GetAll()
+        public IReadOnlyCollection<ProductBasicDto> GetAll(GetProductsQuery query)
         {
+            ArgumentNullException.ThrowIfNull(query);
+
             using var sfera = _sessionFactory.Create();
 
-            return sfera
+            var page = Math.Max(query.Page, 1);
+            var pageSize = Math.Clamp(query.PageSize, 1, 1000);
+
+            var products = sfera
                 .Asortymenty()
                 .Dane
                 .Wszystkie()
+                .OrderBy(a => a.Id)
                 .ToList()
                 .Select(
                 a => new ProductBasicDto(
@@ -98,7 +105,18 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                         a.Symbol,
                         a.Nazwa,
                         a.JednostkaMagazynowa?.PodstawowyKodKreskowy?.Kod ?? string.Empty
-                 ))
+                 ));
+
+            if (!string.IsNullOrWhiteSpace(query.Search))
+            {
+                var searchTerm = query.Search.Trim();
+                products = products.Where(a =>
+                    SearchTextMatcher.MatchesSearch(a, searchTerm));
+            }
+
+            return products
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
                 .ToList();
         }
         public string Create(CreateProductCommand command)

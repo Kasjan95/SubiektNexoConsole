@@ -3,7 +3,7 @@ namespace SubiektNexoConnector.Core.Application.Products
 {
     public interface IProductRepository
     {
-        IReadOnlyCollection<ProductBasicDto> GetAll();
+        IReadOnlyCollection<ProductBasicDto> GetAll(GetProductsQuery querry);
         ProductFromWarehouseDto? GetDetailsFromWarehouse(string warehouseSymbol, string productSymbol);
         ProductDetailsDto? GetDetails(string ProductSymbol);
 

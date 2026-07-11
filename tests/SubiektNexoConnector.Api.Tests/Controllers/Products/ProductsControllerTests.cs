@@ -18,7 +18,7 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
                 new ProductBasicDto(2, "PROD-002", "Product 2", null)
             };
 
-            repository.GetAll().Returns(products);
+            repository.GetAll(Arg.Any<GetProductsQuery>()).Returns(products);
 
             var handler = new GetProductsHandler(repository);
             var controller = new ProductsController();
@@ -36,7 +36,7 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
             var repository = Substitute.For<IProductRepository>();
             var products = new List<ProductBasicDto>();
 
-            repository.GetAll().Returns(products);
+            repository.GetAll(Arg.Any<GetProductsQuery>()).Returns(products);
 
             var handler = new GetProductsHandler(repository);
             var controller = new ProductsController();
