@@ -12,6 +12,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using SubiektNexoConnector.Api.Auth;
 using SubiektNexoConnector.Core.Application.Products;
+using SubiektNexoConnector.Core.Application.Parties.Shared;
 using SubiektNexoConnector.Core.Application.Warehouses;
 using Xunit;
 
@@ -25,6 +26,7 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
 
     public IProductRepository Products { get; } = Substitute.For<IProductRepository>();
     public IWarehouseRepository Warehouses { get; } = Substitute.For<IWarehouseRepository>();
+    public IPartyRepository Parties { get; } = Substitute.For<IPartyRepository>();
 
     public HttpClient CreateBusinessClient()
     {
@@ -58,6 +60,7 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
             services.RemoveAll<ApiAuthenticationOptions>();
             services.RemoveAll<IProductRepository>();
             services.RemoveAll<IWarehouseRepository>();
+            services.RemoveAll<IPartyRepository>();
 
             services.AddSingleton(new ApiAuthenticationOptions
             {
@@ -67,6 +70,7 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
             });
             services.AddSingleton(Products);
             services.AddSingleton(Warehouses);
+            services.AddSingleton(Parties);
         });
     }
 

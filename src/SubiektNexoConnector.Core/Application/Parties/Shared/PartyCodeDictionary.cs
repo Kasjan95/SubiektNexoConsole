@@ -11,23 +11,6 @@ namespace SubiektNexoConnector.Core.Application.Parties.Shared
                 [2] = "organization"
             };
 
-        private static readonly IReadOnlyDictionary<(short Type, byte? Subtype), string> SubtypeNames =
-            new Dictionary<(short Type, byte? Subtype), string>
-            {
-                [(1, 0)] = "partner",
-                [(1, 1)] = "employee",
-                [(1, 3)] = "person",
-                [(2, 4)] = "zus",
-                [(2, 5)] = "tax-office",
-                [(2, 6)] = "promotion-fund",
-                [(2, 7)] = "company",
-                [(2, 8)] = "financial-institution",
-                [(2, 9)] = "cession-entity",
-                [(2, 10)] = "other-institution",
-                [(2, 11)] = "my-company",
-                [(2, 12)] = "bailiff"
-            };
-
         private static readonly IReadOnlyDictionary<int, string> CustomerStatusNames =
             new Dictionary<int, string>
             {
@@ -38,13 +21,6 @@ namespace SubiektNexoConnector.Core.Application.Parties.Shared
         public static string GetTypeName(short type)
         {
             return TypeNames.TryGetValue(type, out var name)
-                ? name
-                : UnknownName;
-        }
-
-        public static string GetSubtypeName(short type, byte? subtype)
-        {
-            return SubtypeNames.TryGetValue((type, subtype), out var name)
                 ? name
                 : UnknownName;
         }

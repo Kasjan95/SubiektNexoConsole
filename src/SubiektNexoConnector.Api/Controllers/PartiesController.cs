@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
+using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
 using SubiektNexoConnector.Core.Application.Parties.Shared;
 using System.Net.Mime;
 
@@ -29,6 +30,20 @@ public class PartiesController : ControllerBase
             Page = page,
             PageSize = pageSize
         });
+        return Ok(result);
+    }
+    [HttpGet("{partySignature}")]
+    [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public ActionResult<PartyDetailsDto> GetDetails(
+        string partySignature,
+        [FromServices] GetPartyDetailsHandler handler)
+    {
+        var result = handler.Handle(new GetPartyDetailsQuery(partySignature));
+
+        if (result is null)
+            return NotFound();
+
         return Ok(result);
     }
 }
