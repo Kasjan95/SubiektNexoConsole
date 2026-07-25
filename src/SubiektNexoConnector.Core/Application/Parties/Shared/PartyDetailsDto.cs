@@ -18,7 +18,7 @@
         string? NationalCourtRegisterNumber,
 
         string? PartyGroup,
-        string? Industry,
+        IReadOnlyList<string> Industries,
         IReadOnlyList<string> Features,
 
         string? Notes,

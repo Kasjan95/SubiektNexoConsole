@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using SubiektNexoConnector.Api.Controllers;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
+using SubiektNexoConnector.Core.Application.Parties.PatchParty;
 using SubiektNexoConnector.Core.Application.Parties.Shared;
 
 namespace SubiektNexoConnector.Api.Tests.Controllers.Parties;
@@ -37,6 +38,40 @@ public class PartiesControllerTests
         Assert.IsType<NotFoundResult>(result.Result);
     }
 
+    [Fact]
+    public void Patch_ReturnsUpdatedSignature_WhenPartyExists()
+    {
+        var repository = Substitute.For<IPartyRepository>();
+        var request = new PatchPartyRequestDto(Signature: new("PARTY-002"));
+        repository.Patch(Arg.Any<PatchPartyCommand>()).Returns("PARTY-002");
+
+        var result = new PartiesController().Patch(
+            "PARTY-001",
+            request,
+            new PatchPartyHandler(repository));
+
+        var okResult = Assert.IsType<OkObjectResult>(result.Result);
+        Assert.Equal(new PatchPartyResponseDto("PARTY-002"), okResult.Value);
+        repository.Received(1).Patch(Arg.Is<PatchPartyCommand>(command =>
+            command.PartySignature == "PARTY-001" &&
+            command.Signature.HasValue &&
+            command.Signature.Value == "PARTY-002"));
+    }
+
+    [Fact]
+    public void Patch_ReturnsNotFound_WhenPartyDoesNotExist()
+    {
+        var repository = Substitute.For<IPartyRepository>();
+        repository.Patch(Arg.Any<PatchPartyCommand>()).Returns((string?)null);
+
+        var result = new PartiesController().Patch(
+            "MISSING",
+            new PatchPartyRequestDto(Notes: new("Updated note")),
+            new PatchPartyHandler(repository));
+
+        Assert.IsType<NotFoundResult>(result.Result);
+    }
+
     private static PartyDetailsDto CreatePartyDetails()
     {
         return new PartyDetailsDto(
@@ -53,7 +88,7 @@ public class PartiesControllerTests
             BusinessRegistryNumber: null,
             NationalCourtRegisterNumber: null,
             PartyGroup: null,
-            Industry: null,
+            Industries: Array.Empty<string>(),
             Features: Array.Empty<string>(),
             Notes: null,
             Addresses: Array.Empty<PartyAddressDto>(),

@@ -51,6 +51,7 @@ try
 
     var app = builder.Build();
 
+    app.UseSerilogRequestLogging();
     app.UseExceptionHandler();
     app.UseStatusCodePages(async statusCodeContext =>
     {
@@ -59,8 +60,6 @@ try
 
         await Results.Problem(statusCode: response.StatusCode).ExecuteAsync(httpContext);
     });
-
-    app.UseSerilogRequestLogging();
 
     if (app.Environment.IsDevelopment())
     {

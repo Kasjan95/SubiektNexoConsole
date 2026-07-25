@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
+using SubiektNexoConnector.Core.Application.Parties.PatchParty;
 using SubiektNexoConnector.Core.Application.Parties.Shared;
 using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Core.Application.Warehouses;
@@ -59,6 +60,7 @@ public static class DependencyInjection
         services.AddTransient<GetWarehousesHandler>();
         services.AddTransient<GetPartiesHandler>();
         services.AddTransient<GetPartyDetailsHandler>();
+        services.AddTransient<PatchPartyHandler>();
 
         return services;
     }
