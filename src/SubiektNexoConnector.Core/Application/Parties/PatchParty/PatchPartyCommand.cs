@@ -14,8 +14,8 @@ public sealed record PatchPartyCommand(
     Optional<string?> EuTaxId,
     Optional<string?> BusinessRegistryNumber,
     Optional<string?> NationalCourtRegisterNumber,
-    Optional<string?> PartyGroup,
-    Optional<IReadOnlyCollection<string>> Industries,
-    Optional<IReadOnlyCollection<string>> Features,
+    Optional<int?> PartyGroupId,
+    Optional<IReadOnlyCollection<int>> IndustryIds,
+    Optional<IReadOnlyCollection<int>> FeatureIds,
     Optional<string?> Notes
 );

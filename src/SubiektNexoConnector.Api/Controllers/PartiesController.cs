@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
 using SubiektNexoConnector.Core.Application.Parties.PatchParty;
@@ -13,6 +14,49 @@ namespace SubiektNexoConnector.Api.Controllers;
 [Tags("Parties")]
 public class PartiesController : ControllerBase
 {
+    [HttpPost]
+    [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    public ActionResult<PartyDetailsDto> Create(
+        [FromBody] CreatePartyRequestDto request,
+        [FromServices] CreatePartyHandler handler)
+    {
+        var party = handler.Handle(new CreatePartyCommand(
+            request.DisplayName,
+            request.Type!.Value,
+            request.Subtype!.Value,
+            request.Signature,
+            request.FirstName,
+            request.LastName,
+            request.CompanyName,
+            request.TaxId,
+            request.EuTaxId,
+            request.BusinessRegistryNumber,
+            request.NationalCourtRegisterNumber,
+            request.PartyGroupId,
+            request.IndustryIds ?? Array.Empty<int>(),
+            request.FeatureIds ?? Array.Empty<int>(),
+            request.Notes,
+            request.Addresses?.Select(address => new CreatePartyAddressCommand(
+                address.AddressTypeId,
+                address.Street,
+                address.HouseNumber,
+                address.ApartmentNumber,
+                address.PostalCode,
+                address.City,
+                address.CountryId)).ToArray() ?? Array.Empty<CreatePartyAddressCommand>(),
+            request.Contacts?.Select(contact => new CreatePartyContactCommand(
+                contact.ContactTypeId,
+                contact.Value,
+                contact.IsPrimary,
+                contact.Comment)).ToArray() ?? Array.Empty<CreatePartyContactCommand>()));
+
+        return CreatedAtAction(
+            nameof(GetDetails),
+            new { partySignature = party.Signature },
+            party);
+    }
+
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyCollection<PartyBasicDto>), StatusCodes.Status200OK)]
     public ActionResult<IReadOnlyCollection<PartyBasicDto>> GetAll(
@@ -33,6 +77,12 @@ public class PartiesController : ControllerBase
         });
         return Ok(result);
     }
+
+    [HttpGet("create-options")]
+    [ProducesResponseType(typeof(PartyCreateOptionsDto), StatusCodes.Status200OK)]
+    public ActionResult<PartyCreateOptionsDto> GetCreateOptions(
+        [FromServices] GetPartyCreateOptionsHandler handler) => Ok(handler.Handle());
+
     [HttpGet("{partySignature}")]
     [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
@@ -69,9 +119,9 @@ public class PartiesController : ControllerBase
             request.EuTaxId,
             request.BusinessRegistryNumber,
             request.NationalCourtRegisterNumber,
-            request.PartyGroup,
-            request.Industries,
-            request.Features,
+            request.PartyGroupId,
+            request.IndustryIds,
+            request.FeatureIds,
             request.Notes));
 
         if (updatedSignature is null)

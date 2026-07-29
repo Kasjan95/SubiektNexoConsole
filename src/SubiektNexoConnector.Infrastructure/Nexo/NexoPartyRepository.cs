@@ -1,5 +1,7 @@
 using InsERT.Moria.ModelDanych;
+using InsERT.Moria.Klienci;
 using InsERT.Moria.Sfera;
+using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
 using SubiektNexoConnector.Core.Application.Parties.PatchParty;
@@ -72,6 +74,55 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 .Take(pageSize)
                 .ToList();
         }
+
+        public PartyCreateOptionsDto GetCreateOptions()
+        {
+            using Uchwyt sfera = _sessionFactory.Create();
+
+            var partyTypes = Enum.GetValues<PodtypPodmiotu>()
+                .Select(subtype => new PartyTypeOptionDto(
+                    PodtypPodmiotuZakresy.OkreslaOsobe(subtype) ? (short)1 : (short)2,
+                    (byte)subtype,
+                    subtype.ToString()))
+                .ToList();
+
+            return new PartyCreateOptionsDto(
+                partyTypes,
+                sfera.TypyAdresu().Dane.Wszystkie()
+                    .ToList()
+                    .OrderBy(addressType => addressType.Nazwa)
+                    .Select(addressType => new ReferenceDataOptionDto(addressType.Id, addressType.Nazwa))
+                    .ToList(),
+                sfera.RodzajeKontaktu().Dane.Wszystkie()
+                    .ToList()
+                    .OrderBy(contactType => contactType.Nazwa)
+                    .Select(contactType => new ReferenceDataOptionDto(contactType.Id, contactType.Nazwa))
+                    .ToList(),
+                sfera.Panstwa().Dane.Wszystkie()
+                    .ToList()
+                    .OrderBy(country => country.Nazwa)
+                    .Select(country => new CountryOptionDto(
+                        country.Id,
+                        country.Nazwa,
+                        country.KodISOAlfa2()))
+                    .ToList(),
+                sfera.Grupy().Dane.Wszystkie()
+                    .ToList()
+                    .OrderBy(group => group.Nazwa)
+                    .Select(group => new ReferenceDataOptionDto(group.Id, group.Nazwa))
+                    .ToList(),
+                sfera.Branze().Dane.Wszystkie()
+                    .ToList()
+                    .OrderBy(industry => industry.Nazwa)
+                    .Select(industry => new ReferenceDataOptionDto(industry.Id, industry.Nazwa))
+                    .ToList(),
+                sfera.Cechy().Dane.Wszystkie()
+                    .ToList()
+                    .OrderBy(feature => feature.Nazwa)
+                    .Select(feature => new ReferenceDataOptionDto(feature.Id, feature.Nazwa))
+                    .ToList());
+        }
+
         public PartyDetailsDto? GetDetails(GetPartyDetailsQuery query)
         {
             ArgumentNullException.ThrowIfNull(query);
@@ -105,6 +156,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             List<PartyContactDto> contacts = party.Kontakty.Select(c => new PartyContactDto(
                 c.Id,
                 c.Podstawowy,
+                c.Rodzaj.Id,
                 c.Rodzaj.Nazwa,
                 c.Wartosc,
                 c.Komentarz)).ToList();
@@ -130,6 +182,39 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 contacts,
                 tradeCreditLimit);
         }
+        
+
+        private static string BuildValidationMessage(
+            string messagePrefix,
+            IEnumerable<KomunikatWalidacji> errors)
+        {
+            StringBuilder messageBuilder = new(messagePrefix);
+
+            foreach (var error in errors)
+            {
+                var fieldNames = error.NazwyPol is null || !error.NazwyPol.Any()
+                    ? "Unknown field"
+                    : string.Join(", ", error.NazwyPol);
+
+                messageBuilder.AppendLine();
+                messageBuilder.Append($"{fieldNames}: {error.Tresc}");
+            }
+
+            return messageBuilder.ToString();
+        }
+        private DocumentTradeCreditLimitDto MapDocumentTradeCreditLimit(bool active, LimitKredytuKupieckiego? limit)
+        {
+            if (!active || limit is null)
+                return new DocumentTradeCreditLimitDto(false, null, null, null);
+
+            return new DocumentTradeCreditLimitDto(
+                true,
+                limit.Wartosc,
+                limit.LimitPonizejWartosci,
+                limit.LimitPowyzejWartosci);
+        }
+        #endregion
+        #region PATCH
         public string? Patch(PatchPartyCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
@@ -170,14 +255,14 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 if (command.Notes.HasValue)
                     party.Uwagi = command.Notes.Value;
 
-                if (command.PartyGroup.HasValue)
-                    UpdatePartyGroup(sfera, party, command.PartyGroup.Value);
+                if (command.PartyGroupId.HasValue)
+                    SetPartyGroup(sfera, party, command.PartyGroupId.Value);
 
-                if (command.Industries.HasValue)
-                    UpdateIndustries(sfera, party, command.Industries.Value!);
+                if (command.IndustryIds.HasValue)
+                    SetIndustries(sfera, party, command.IndustryIds.Value!);
 
-                if (command.Features.HasValue)
-                    UpdateFeatures(sfera, party, command.Features.Value!);
+                if (command.FeatureIds.HasValue)
+                    SetFeatures(sfera, party, command.FeatureIds.Value!);
 
                 if (!partyBo.Zapisz())
                 {
@@ -232,86 +317,171 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 company.KRS = command.NationalCourtRegisterNumber.Value;
         }
 
-        private static void UpdatePartyGroup(Uchwyt sfera, Podmiot party, string? groupName)
+        #endregion
+        #region POST
+        public PartyDetailsDto Create(CreatePartyCommand command)
+        {
+            ArgumentNullException.ThrowIfNull(command);
+            using Uchwyt sfera = _sessionFactory.Create();
+            using var partyBo = command.Type switch
+            {
+                1 => sfera.Podmioty().UtworzOsobe(),
+                2 => sfera.Podmioty().UtworzFirme(),
+                _ => throw new InvalidOperationException($"Party type '{command.Type}' is not supported.")
+            };
+
+            partyBo.AutoSymbol();
+            partyBo.Zablokuj();
+            var party = partyBo.Dane;
+
+            if (command.Signature is not null)
+                party.Sygnatura.PelnaSygnatura = command.Signature;
+
+            party.NazwaSkrocona = command.DisplayName;
+            party.Podtyp = command.Subtype;
+            party.Aktywny = true;
+            if (command.FirstName is not null || command.LastName is not null)
+            {
+                var person = party.Osoba ?? throw new InvalidOperationException("Person data can only be set for a person.");
+                person.Imie = command.FirstName;
+                person.Nazwisko = command.LastName;
+            }
+            if (command.CompanyName is not null ||
+                command.BusinessRegistryNumber is not null ||
+                command.NationalCourtRegisterNumber is not null)
+            {
+                var company = party.Firma ?? throw new InvalidOperationException("Company data can only be set for an organization.");
+
+                if (command.CompanyName is not null)
+                    company.Nazwa = command.CompanyName;
+
+                if (command.BusinessRegistryNumber is not null)
+                    company.REGON = command.BusinessRegistryNumber;
+
+                if (command.NationalCourtRegisterNumber is not null)
+                    company.KRS = command.NationalCourtRegisterNumber;
+            }
+            if (command.TaxId is not null)
+                party.NIP = command.TaxId;
+
+            if (command.EuTaxId is not null)
+            {
+                party.NIPUE = command.EuTaxId;
+                party.PodatnikUE = true;
+            }
+            party.Uwagi = command.Notes;
+            SetPartyGroup(sfera, party, command.PartyGroupId);
+            SetIndustries(sfera, party, command.IndustryIds);
+            SetFeatures(sfera, party, command.FeatureIds);
+            AddAddresses(sfera, partyBo, party, command.Addresses);
+            AddContacts(sfera, party, command.Contacts);
+            if (!partyBo.Zapisz())
+            {
+                throw new InvalidOperationException(BuildValidationMessage(
+                    "Party creation failed:",
+                    partyBo.PobierzKomunikatyBledow()));
+            }
+            partyBo.Odblokuj();
+            return GetDetails(new GetPartyDetailsQuery(party.Sygnatura.PelnaSygnatura))!;
+        }
+
+        private static void SetPartyGroup(Uchwyt sfera, Podmiot party, int? partyGroupId)
         {
             party.Grupy.Clear();
 
-            if (groupName is null)
+            if (partyGroupId is null)
                 return;
 
-            using var group = sfera.Grupy().Znajdz(groupName)
-                ?? throw new InvalidOperationException($"Party group '{groupName}' was not found.");
+            var partyGroup = sfera.Grupy().Dane.Pierwszy(group => group.Id == partyGroupId.Value)
+                ?? throw new InvalidOperationException($"Party group '{partyGroupId}' was not found.");
 
-            party.Grupy.Add(group.Dane);
+            party.Grupy.Add(partyGroup);
         }
 
-        private static void UpdateIndustries(
+        private static void SetIndustries(
             Uchwyt sfera,
             Podmiot party,
-            IReadOnlyCollection<string> industryNames)
+            IReadOnlyCollection<int> industryIds)
         {
-            var industries = industryNames.Select(industryName =>
-                sfera.Branze().Znajdz(industryName)
-                ?? throw new InvalidOperationException($"Industry '{industryName}' was not found."))
-                .ToList();
+            var ids = industryIds.Distinct().ToHashSet();
+            var industries = sfera.Branze().Dane.Wszystkie(industry => ids.Contains(industry.Id)).ToList();
+
+            if (industries.Count != ids.Count)
+                throw new InvalidOperationException("One or more industry IDs were not found.");
 
             party.Branze.Clear();
 
             foreach (var industry in industries)
-            {
-                using (industry)
-                    party.Branze.Add(industry.Dane);
-            }
+                party.Branze.Add(industry);
         }
 
-        private static void UpdateFeatures(
+        private static void SetFeatures(
             Uchwyt sfera,
             Podmiot party,
-            IReadOnlyCollection<string> featureNames)
+            IReadOnlyCollection<int> featureIds)
         {
-            var features = featureNames.Select(featureName =>
-                sfera.Cechy().Znajdz(featureName)
-                ?? throw new InvalidOperationException($"Feature '{featureName}' was not found."))
-                .ToList();
+            var ids = featureIds.Distinct().ToHashSet();
+            var features = sfera.Cechy().Dane.Wszystkie(feature => ids.Contains(feature.Id)).ToList();
+
+            if (features.Count != ids.Count)
+                throw new InvalidOperationException("One or more feature IDs were not found.");
 
             party.Cechy.Clear();
 
             foreach (var feature in features)
+                party.Cechy.Add(feature);
+        }
+
+        private static void AddAddresses(
+            Uchwyt sfera,
+            IPodmiot partyBo,
+            Podmiot party,
+            IReadOnlyCollection<CreatePartyAddressCommand> addresses)
+        {
+            var addressTypes = sfera.TypyAdresu();
+
+            foreach (var command in addresses)
             {
-                using (feature)
-                    party.Cechy.Add(feature.Dane);
+                var addressType = addressTypes.Dane.Pierwszy(type => type.Id == command.AddressTypeId)
+                    ?? throw new InvalidOperationException($"Address type '{command.AddressTypeId}' was not found.");
+                var address = addressType.Id == addressTypes.DaneDomyslne.Glowny.Id
+                    ? party.AdresPodstawowy ?? partyBo.DodajAdres(addressType)
+                    : partyBo.DodajAdres(addressType);
+
+                address.Szczegoly ??= new AdresSzczegoly();
+                address.Szczegoly.Ulica = command.Street ?? string.Empty;
+                address.Szczegoly.NrDomu = command.HouseNumber ?? string.Empty;
+                address.Szczegoly.NrLokalu = command.ApartmentNumber ?? string.Empty;
+                address.Szczegoly.KodPocztowy = command.PostalCode ?? string.Empty;
+                address.Szczegoly.Miejscowosc = command.City ?? string.Empty;
+
+                if (command.CountryId is not null)
+                {
+                    address.Panstwo = sfera.Panstwa().Dane.Pierwszy(country => country.Id == command.CountryId.Value)
+                        ?? throw new InvalidOperationException($"Country '{command.CountryId}' was not found.");
+                }
             }
         }
 
-        private static string BuildValidationMessage(
-            string messagePrefix,
-            IEnumerable<KomunikatWalidacji> errors)
+        private static void AddContacts(
+            Uchwyt sfera,
+            Podmiot party,
+            IReadOnlyCollection<CreatePartyContactCommand> contacts)
         {
-            StringBuilder messageBuilder = new(messagePrefix);
-
-            foreach (var error in errors)
+            foreach (var command in contacts)
             {
-                var fieldNames = error.NazwyPol is null || !error.NazwyPol.Any()
-                    ? "Unknown field"
-                    : string.Join(", ", error.NazwyPol);
-
-                messageBuilder.AppendLine();
-                messageBuilder.Append($"{fieldNames}: {error.Tresc}");
+                var contactType = sfera.RodzajeKontaktu().Dane.Pierwszy(type =>
+                    type.Id == command.ContactTypeId)
+                    ?? throw new InvalidOperationException($"Contact type '{command.ContactTypeId}' was not found.");
+                var contact = new Kontakt();
+                party.Kontakty.Add(contact);
+                contact.Rodzaj = contactType;
+                contact.Wartosc = command.Value ?? string.Empty;
+                contact.Podstawowy = command.IsPrimary;
+                contact.Komentarz = command.Comment ?? string.Empty;
             }
-
-            return messageBuilder.ToString();
         }
-        private DocumentTradeCreditLimitDto MapDocumentTradeCreditLimit(bool active, LimitKredytuKupieckiego? limit)
-        {
-            if (!active || limit is null)
-                return new DocumentTradeCreditLimitDto(false, null, null, null);
 
-            return new DocumentTradeCreditLimitDto(
-                true,
-                limit.Wartosc,
-                limit.LimitPonizejWartosci,
-                limit.LimitPowyzejWartosci);
-        }
         #endregion
     }
 }

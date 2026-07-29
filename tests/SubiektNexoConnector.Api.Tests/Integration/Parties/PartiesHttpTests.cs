@@ -4,6 +4,7 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
+using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
 using SubiektNexoConnector.Core.Application.Parties.PatchParty;
 using SubiektNexoConnector.Core.Application.Parties.Shared;
@@ -19,6 +20,26 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     {
         _factory = factory;
         _client = factory.CreateBusinessClient();
+    }
+
+    [Fact]
+    public async Task GetPartyCreateOptions_Returns200AndJsonBody()
+    {
+        var options = new PartyCreateOptionsDto(
+            PartyTypes: [new PartyTypeOptionDto(1, 3, "Person")],
+            AddressTypes: [new ReferenceDataOptionDto(1, "Main")],
+            ContactTypes: [new ReferenceDataOptionDto(3, "Email")],
+            Countries: [new CountryOptionDto(1, "Poland", "PL")],
+            PartyGroups: [new ReferenceDataOptionDto(100000, "VIP")],
+            Industries: [new ReferenceDataOptionDto(1, "Retail")],
+            Features: [new ReferenceDataOptionDto(100001, "B2B")]);
+        _factory.Parties.GetCreateOptions().Returns(options);
+
+        var response = await _client.GetAsync("/parties/create-options");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var body = await response.Content.ReadFromJsonAsync<PartyCreateOptionsDto>();
+        body.Should().BeEquivalentTo(options);
     }
 
     [Fact]
@@ -98,22 +119,22 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
-    public async Task PatchParty_PassesEmptyLists_WhenIndustriesAndFeaturesAreCleared()
+    public async Task PatchParty_PassesEmptyLists_WhenIndustryIdsAndFeatureIdsAreCleared()
     {
         _factory.Parties
             .Patch(Arg.Is<PatchPartyCommand>(command =>
-                command.Industries.HasValue &&
-                command.Industries.Value!.Count == 0 &&
-                command.Features.HasValue &&
-                command.Features.Value!.Count == 0))
+                command.IndustryIds.HasValue &&
+                command.IndustryIds.Value!.Count == 0 &&
+                command.FeatureIds.HasValue &&
+                command.FeatureIds.Value!.Count == 0))
             .Returns("PARTY-001");
 
         var response = await _client.PatchAsJsonAsync(
             "/parties/PARTY-001",
             new
             {
-                Industries = Array.Empty<string>(),
-                Features = Array.Empty<string>()
+                IndustryIds = Array.Empty<int>(),
+                FeatureIds = Array.Empty<int>()
             });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -124,11 +145,11 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     {
         _factory.Parties
             .Patch(Arg.Any<PatchPartyCommand>())
-            .Returns(_ => throw new InvalidOperationException("Party group 'Missing group' was not found."));
+            .Returns(_ => throw new InvalidOperationException("Party group '999999' was not found."));
 
         var response = await _client.PatchAsJsonAsync(
             "/parties/PARTY-001",
-            new { PartyGroup = "Missing group" });
+            new { PartyGroupId = 999999 });
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
@@ -136,7 +157,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
         body.Should().NotBeNull();
         body!.Status.Should().Be(StatusCodes.Status400BadRequest);
         body.Title.Should().Be("Bad Request");
-        body.Detail.Should().Be("Party group 'Missing group' was not found.");
+        body.Detail.Should().Be("Party group '999999' was not found.");
         body.Instance.Should().Be("/parties/PARTY-001");
     }
 

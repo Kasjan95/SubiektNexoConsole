@@ -29,9 +29,9 @@ public sealed class PatchPartyHandler
             NormalizeOptionalText(command.EuTaxId),
             NormalizeOptionalText(command.BusinessRegistryNumber),
             NormalizeOptionalText(command.NationalCourtRegisterNumber),
-            NormalizeOptionalText(command.PartyGroup),
-            NormalizeTextList(command.Industries, "Industries"),
-            NormalizeTextList(command.Features, "Features"),
+            command.PartyGroupId,
+            NormalizeIdList(command.IndustryIds, "Industry IDs"),
+            NormalizeIdList(command.FeatureIds, "Feature IDs"),
             NormalizeOptionalText(command.Notes)));
     }
 
@@ -46,9 +46,9 @@ public sealed class PatchPartyHandler
         command.EuTaxId.HasValue ||
         command.BusinessRegistryNumber.HasValue ||
         command.NationalCourtRegisterNumber.HasValue ||
-        command.PartyGroup.HasValue ||
-        command.Industries.HasValue ||
-        command.Features.HasValue ||
+        command.PartyGroupId.HasValue ||
+        command.IndustryIds.HasValue ||
+        command.FeatureIds.HasValue ||
         command.Notes.HasValue;
 
     private static Optional<string> NormalizeRequiredText(Optional<string> field, string fieldName)
@@ -77,8 +77,8 @@ public sealed class PatchPartyHandler
         return field.Value.Trim();
     }
 
-    private static Optional<IReadOnlyCollection<string>> NormalizeTextList(
-        Optional<IReadOnlyCollection<string>> field,
+    private static Optional<IReadOnlyCollection<int>> NormalizeIdList(
+        Optional<IReadOnlyCollection<int>> field,
         string fieldName)
     {
         if (!field.HasValue)
@@ -87,17 +87,9 @@ public sealed class PatchPartyHandler
         if (field.Value is null)
             throw new InvalidOperationException($"{fieldName} cannot be null.");
 
-        var normalizedValues = field.Value
-            .Select(value => value?.Trim())
-            .ToList();
+        if (field.Value.Any(id => id <= 0))
+            throw new InvalidOperationException($"{fieldName} must contain positive values.");
 
-        if (normalizedValues.Any(string.IsNullOrEmpty))
-            throw new InvalidOperationException($"{fieldName} cannot contain empty values.");
-
-        return new Optional<IReadOnlyCollection<string>>(
-            normalizedValues
-                .Cast<string>()
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList());
+        return new Optional<IReadOnlyCollection<int>>(field.Value.Distinct().ToList());
     }
 }
