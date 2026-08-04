@@ -2,6 +2,8 @@ using InsERT.Moria.Sfera;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using SubiektNexoConnector.Core.Application.AdditionalFields.GetFieldsType;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
@@ -51,6 +53,7 @@ public static class DependencyInjection
         services.AddTransient<IProductRepository, NexoProductRepository>();
         services.AddTransient<IWarehouseRepository, NexoWarehouseRepository>();
         services.AddTransient<IPartyRepository, NexoPartyRepository>();
+        services.AddTransient<IAdditionalFieldRepository, NexoAdditionalFieldsRepository>();
 
         services.AddTransient<CreateProductHandler>();
         services.AddTransient<PatchProductHandler>();
@@ -64,6 +67,7 @@ public static class DependencyInjection
         services.AddTransient<GetPartyDetailsHandler>();
         services.AddTransient<PatchPartyHandler>();
         services.AddTransient<CreatePartyHandler>();
+        services.AddTransient<GetFieldsTypeHandler>();
 
         return services;
     }
