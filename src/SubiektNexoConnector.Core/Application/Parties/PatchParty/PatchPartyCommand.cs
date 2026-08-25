@@ -1,4 +1,5 @@
 using SubiektNexoConnector.Core.Application.Common;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 
 namespace SubiektNexoConnector.Core.Application.Parties.PatchParty;
 
@@ -17,5 +18,8 @@ public sealed record PatchPartyCommand(
     Optional<int?> PartyGroupId,
     Optional<IReadOnlyCollection<int>> IndustryIds,
     Optional<IReadOnlyCollection<int>> FeatureIds,
-    Optional<string?> Notes
+    Optional<string?> Notes,
+    Optional<IReadOnlyCollection<AdditionalFieldValueDto>> BasicFields = default,
+    Optional<IReadOnlyCollection<AdditionalFieldValueDto>> AdvancedFields = default,
+    Optional<FlagAssignmentDto?> Flag = default
 );

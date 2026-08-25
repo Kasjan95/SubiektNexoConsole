@@ -1,0 +1,13 @@
+using SubiektNexoConnector.Core.Application.AdditionalFields.GetBasicFieldDefinitions;
+using SubiektNexoConnector.Core.Application.AdditionalFields.GetAdvancedFieldDefinitions;
+using SubiektNexoConnector.Core.Application.AdditionalFields.GetFlagDefinitions;
+using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
+
+namespace SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
+
+public interface IAdditionalFieldDefinitionRepository
+{
+    AdvancedFieldDefinitionsDto GetAdvancedFieldDefinitions(GetAdvancedFieldDefinitionsQuery query);
+    BasicFieldDefinitionsDto GetBasicFieldDefinitions(GetBasicFieldDefinitionsQuery query);
+    FlagDefinitionsDto GetFlagDefinitions(GetFlagDefinitionQuery query);
+}

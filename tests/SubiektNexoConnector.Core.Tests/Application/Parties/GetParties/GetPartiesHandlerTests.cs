@@ -24,13 +24,13 @@ namespace SubiektNexoConnector.Core.Tests.Application.Parties.GetParties
                 PageSize = 50
             };
 
-            repository.GetAll(query).Returns(expectedParties);
+            repository.GetAllParties(query).Returns(expectedParties);
             var handler = new GetPartiesHandler(repository);
 
             var result = handler.Handle(query);
 
             Assert.Equal(expectedParties, result);
-            repository.Received(1).GetAll(query);
+            repository.Received(1).GetAllParties(query);
         }
 
         [Fact]

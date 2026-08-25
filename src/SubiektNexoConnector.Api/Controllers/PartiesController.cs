@@ -37,19 +37,19 @@ public class PartiesController : ControllerBase
             request.IndustryIds ?? Array.Empty<int>(),
             request.FeatureIds ?? Array.Empty<int>(),
             request.Notes,
-            request.Addresses?.Select(address => new CreatePartyAddressCommand(
+            request.Addresses?.Select(address => new PartyAddressInput(
                 address.AddressTypeId,
                 address.Street,
                 address.HouseNumber,
                 address.ApartmentNumber,
                 address.PostalCode,
                 address.City,
-                address.CountryId)).ToArray() ?? Array.Empty<CreatePartyAddressCommand>(),
-            request.Contacts?.Select(contact => new CreatePartyContactCommand(
+                address.CountryId)).ToArray() ?? Array.Empty<PartyAddressInput>(),
+            request.Contacts?.Select(contact => new PartyContactInput(
                 contact.ContactTypeId,
                 contact.Value,
                 contact.IsPrimary,
-                contact.Comment)).ToArray() ?? Array.Empty<CreatePartyContactCommand>()));
+                contact.Comment)).ToArray() ?? Array.Empty<PartyContactInput>()));
 
         return CreatedAtAction(
             nameof(GetDetails),
@@ -80,8 +80,7 @@ public class PartiesController : ControllerBase
 
     [HttpGet("create-options")]
     [ProducesResponseType(typeof(PartyCreateOptionsDto), StatusCodes.Status200OK)]
-    public ActionResult<PartyCreateOptionsDto> GetCreateOptions(
-        [FromServices] GetPartyCreateOptionsHandler handler) => Ok(handler.Handle());
+    public ActionResult<PartyCreateOptionsDto> GetCreateOptions([FromServices] GetPartyCreateOptionsHandler handler) => Ok(handler.Handle());
 
     [HttpGet("{partySignature}")]
     [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status200OK)]
@@ -122,7 +121,10 @@ public class PartiesController : ControllerBase
             request.PartyGroupId,
             request.IndustryIds,
             request.FeatureIds,
-            request.Notes));
+            request.Notes,
+            request.BasicFields,
+            request.AdvancedFields,
+            request.Flag));
 
         if (updatedSignature is null)
             return NotFound();

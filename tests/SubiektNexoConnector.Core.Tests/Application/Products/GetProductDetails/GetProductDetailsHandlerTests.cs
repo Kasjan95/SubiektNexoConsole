@@ -45,7 +45,10 @@ namespace SubiektNexoConnector.Core.Tests.Application.Products
                 ean,
                 new ProductTypeDto("product", "product"),
                 true,
+                null,
                 SupplierLeadTimeDays,
+                [],
+                [],
                 new List<ProductSupplierDto>
                 {
             new ProductSupplierDto(10, "Supplier 1", "1234567890", true, "SUP-001", "Supplier Product")

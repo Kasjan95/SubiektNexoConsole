@@ -1,5 +1,10 @@
 ﻿namespace SubiektNexoConnector.Core.Application.Parties.Shared
 {
+    using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
+    using SubiektNexoConnector.Core.Application.Common;
+    using SubiektNexoConnector.Core.Application.Parties.Addresses.Shared;
+    using SubiektNexoConnector.Core.Application.Parties.Contacts.Shared;
+
     public sealed record PartyDetailsDto(
         string Signature,
         string DisplayName,
@@ -22,6 +27,9 @@
         IReadOnlyList<string> Features,
 
         string? Notes,
+        FlagAssignmentDto? Flag,
+        IReadOnlyCollection<AdditionalFieldValueDto> BasicFields,
+        IReadOnlyCollection<AdditionalFieldValueDto> AdvancedFields,
 
         IReadOnlyCollection<PartyAddressDto> Addresses,
         IReadOnlyCollection<PartyContactDto> Contacts,

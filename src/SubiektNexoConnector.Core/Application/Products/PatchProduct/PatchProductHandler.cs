@@ -1,3 +1,4 @@
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Common;
 
 namespace SubiektNexoConnector.Core.Application.Products
@@ -13,44 +14,30 @@ namespace SubiektNexoConnector.Core.Application.Products
 
         public string? Handle(PatchProductCommand command)
         {
-            if (!command.Name.HasValue && !command.SKU.HasValue && !command.EAN.HasValue)
+            if (!command.Name.HasValue
+                && !command.SKU.HasValue
+                && !command.EAN.HasValue
+                && !command.BasicFields.HasValue
+                && !command.AdvancedFields.HasValue
+                && !command.Flag.HasValue)
                 throw new InvalidOperationException("At least one field must be provided.");
 
-            var normalizedName = NormalizeRequiredField(command.Name, "Name");
-            var normalizedSku = NormalizeRequiredField(command.SKU, "SKU");
-            var normalizedEan = NormalizeOptionalEan(command.EAN);
+            var normalizedName = OptionalPatchNormalizer.RequiredText(command.Name, "Name");
+            var normalizedSku = OptionalPatchNormalizer.RequiredText(command.SKU, "SKU");
+            var normalizedEan = OptionalPatchNormalizer.OptionalText(command.EAN);
+            var basicFields = OptionalPatchNormalizer.AdditionalFields(command.BasicFields, "BasicFields");
+            var advancedFields = OptionalPatchNormalizer.AdditionalFields(command.AdvancedFields, "AdvancedFields");
+            var flag = OptionalPatchNormalizer.Flag(command.Flag);
 
             return _repository.Patch(new PatchProductCommand(
                 command.ProductSku,
                 normalizedName,
                 normalizedSku,
-                normalizedEan));
+                normalizedEan,
+                basicFields,
+                advancedFields,
+                flag));
         }
 
-        private static Optional<string> NormalizeRequiredField(Optional<string> field, string fieldName)
-        {
-            if (!field.HasValue)
-                return field;
-
-            if (field.Value is null)
-                throw new InvalidOperationException($"{fieldName} cannot be null.");
-
-            var normalizedValue = field.Value.Trim();
-            if (normalizedValue.Length == 0)
-                throw new InvalidOperationException($"{fieldName} cannot be empty.");
-
-            return normalizedValue;
-        }
-
-        private static Optional<string?> NormalizeOptionalEan(Optional<string?> field)
-        {
-            if (!field.HasValue)
-                return field;
-
-            if (string.IsNullOrWhiteSpace(field.Value))
-                return new Optional<string?>(null);
-
-            return field.Value.Trim();
-        }
     }
 }

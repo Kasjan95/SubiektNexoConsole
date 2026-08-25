@@ -1,9 +1,12 @@
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Api.Controllers;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
 using SubiektNexoConnector.Core.Application.Parties.PatchParty;
 using SubiektNexoConnector.Core.Application.Parties.Shared;
+using SubiektNexoConnector.Core.Application.Parties.Addresses.Shared;
+using SubiektNexoConnector.Core.Application.Parties.Contacts.Shared;
 
 namespace SubiektNexoConnector.Api.Tests.Controllers.Parties;
 
@@ -14,14 +17,14 @@ public class PartiesControllerTests
     {
         var repository = Substitute.For<IPartyRepository>();
         var party = CreatePartyDetails();
-        repository.GetDetails(Arg.Any<GetPartyDetailsQuery>()).Returns(party);
+        repository.GetDetailsParty(Arg.Any<GetPartyDetailsQuery>()).Returns(party);
 
         var controller = new PartiesController();
         var result = controller.GetDetails(party.Signature, new GetPartyDetailsHandler(repository));
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         Assert.Equal(party, okResult.Value);
-        repository.Received(1).GetDetails(
+        repository.Received(1).GetDetailsParty(
             Arg.Is<GetPartyDetailsQuery>(query => query.PartySignature == party.Signature));
     }
 
@@ -30,7 +33,7 @@ public class PartiesControllerTests
     {
         var repository = Substitute.For<IPartyRepository>();
         const string signature = "MISSING";
-        repository.GetDetails(Arg.Any<GetPartyDetailsQuery>()).Returns((PartyDetailsDto?)null);
+        repository.GetDetailsParty(Arg.Any<GetPartyDetailsQuery>()).Returns((PartyDetailsDto?)null);
 
         var controller = new PartiesController();
         var result = controller.GetDetails(signature, new GetPartyDetailsHandler(repository));
@@ -43,7 +46,7 @@ public class PartiesControllerTests
     {
         var repository = Substitute.For<IPartyRepository>();
         var request = new PatchPartyRequestDto(Signature: new("PARTY-002"));
-        repository.Patch(Arg.Any<PatchPartyCommand>()).Returns("PARTY-002");
+        repository.PatchParty(Arg.Any<PatchPartyCommand>()).Returns("PARTY-002");
 
         var result = new PartiesController().Patch(
             "PARTY-001",
@@ -52,7 +55,7 @@ public class PartiesControllerTests
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         Assert.Equal(new PatchPartyResponseDto("PARTY-002"), okResult.Value);
-        repository.Received(1).Patch(Arg.Is<PatchPartyCommand>(command =>
+        repository.Received(1).PatchParty(Arg.Is<PatchPartyCommand>(command =>
             command.PartySignature == "PARTY-001" &&
             command.Signature.HasValue &&
             command.Signature.Value == "PARTY-002"));
@@ -62,7 +65,7 @@ public class PartiesControllerTests
     public void Patch_ReturnsNotFound_WhenPartyDoesNotExist()
     {
         var repository = Substitute.For<IPartyRepository>();
-        repository.Patch(Arg.Any<PatchPartyCommand>()).Returns((string?)null);
+        repository.PatchParty(Arg.Any<PatchPartyCommand>()).Returns((string?)null);
 
         var result = new PartiesController().Patch(
             "MISSING",
@@ -91,6 +94,9 @@ public class PartiesControllerTests
             Industries: Array.Empty<string>(),
             Features: Array.Empty<string>(),
             Notes: null,
+            Flag: null,
+            BasicFields: Array.Empty<AdditionalFieldValueDto>(),
+            AdvancedFields: Array.Empty<AdditionalFieldValueDto>(),
             Addresses: Array.Empty<PartyAddressDto>(),
             Contacts: Array.Empty<PartyContactDto>(),
             TradeCreditLimit: CreateTradeCreditLimit());

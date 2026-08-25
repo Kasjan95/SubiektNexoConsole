@@ -3,9 +3,11 @@ using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using SubiektNexoConnector.Api.Tests.TestDataBuilders;
 using SubiektNexoConnector.Core.Application.Products;
+using SubiektNexoConnector.Core.Application.Common;
 using System.Net;
 using Microsoft.AspNetCore.Http;
 using System.Net.Http.Json;
+using System.Text.Json;
 
 namespace SubiektNexoConnector.Api.Tests.Integration;
 
@@ -51,7 +53,8 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
     [Fact]
     public async Task GetProductDetails_Returns200AndJsonBody()
     {
-        var productDetails = ProductDetailsDtoTestData.CreateProductDetailsDto();
+        var productDetails = ProductDetailsDtoTestData.CreateProductDetailsDto(
+            flag: new FlagAssignmentDto(12, "Nie sprzedawać bez potwierdzenia wymiaru"));
         _factory.Products.GetDetails(productDetails.SKU).Returns(productDetails);
 
         var response = await _client.GetAsync($"/products/{productDetails.SKU}");
@@ -184,6 +187,85 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
         body.Should().NotBeNull();
         body!.Status.Should().Be(StatusCodes.Status400BadRequest);
         body.Detail.Should().Be("Name cannot be null.");
+    }
+
+    [Fact]
+    public async Task PatchProduct_ForwardsBasicAndAdvancedFields()
+    {
+        var request = new
+        {
+            BasicFields = new[]
+            {
+                new { Id = "PoleWlasne1", Value = "120" }
+            },
+            AdvancedFields = new[]
+            {
+                new { Id = "weight", Value = 42.5m }
+            }
+        };
+        _factory.Products
+            .Patch(Arg.Is<PatchProductCommand>(command => HasAdditionalFieldUpdates(command)))
+            .Returns("ABC-123");
+
+        var response = await _client.PatchAsJsonAsync("/products/ABC-123", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task PatchProduct_ForwardsFlagAssignment()
+    {
+        var request = new
+        {
+            Flag = new { Id = 12, Comment = "Require confirmation" }
+        };
+        _factory.Products
+            .Patch(Arg.Is<PatchProductCommand>(command =>
+                command.ProductSku == "ABC-123"
+                && command.Flag.HasValue
+                && command.Flag.Value!.Id == 12
+                && command.Flag.Value.Comment == "Require confirmation"))
+            .Returns("ABC-123");
+
+        var response = await _client.PatchAsJsonAsync("/products/ABC-123", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Fact]
+    public async Task PatchProduct_ForwardsNullFlagToRemoveAssignment()
+    {
+        var request = new { Flag = (object?)null };
+        _factory.Products
+            .Patch(Arg.Is<PatchProductCommand>(command =>
+                command.ProductSku == "ABC-123"
+                && command.Flag.HasValue
+                && command.Flag.Value == null))
+            .Returns("ABC-123");
+
+        var response = await _client.PatchAsJsonAsync("/products/ABC-123", request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    private static bool HasAdditionalFieldUpdates(PatchProductCommand command)
+    {
+        if (command.ProductSku != "ABC-123"
+            || !command.BasicFields.HasValue
+            || !command.AdvancedFields.HasValue)
+        {
+            return false;
+        }
+
+        var basicField = command.BasicFields.Value!.Single();
+        var advancedField = command.AdvancedFields.Value!.Single();
+
+        return basicField.Id == "PoleWlasne1"
+            && basicField.Value is JsonElement { ValueKind: JsonValueKind.String } basicValue
+            && basicValue.GetString() == "120"
+            && advancedField.Id == "weight"
+            && advancedField.Value is JsonElement { ValueKind: JsonValueKind.Number } advancedValue
+            && advancedValue.GetDecimal() == 42.5m;
     }
 
     [Fact]

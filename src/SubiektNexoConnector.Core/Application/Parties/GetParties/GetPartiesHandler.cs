@@ -14,7 +14,7 @@ namespace SubiektNexoConnector.Core.Application.Parties.GetParties
         public IReadOnlyCollection<PartyBasicDto> Handle(GetPartiesQuery query)
         {
             ArgumentNullException.ThrowIfNull(query);
-            return _repository.GetAll(query);
+            return _repository.GetAllParties(query);
         }
     }
 }

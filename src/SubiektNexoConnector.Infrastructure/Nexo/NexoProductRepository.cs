@@ -1,10 +1,17 @@
 using InsERT.Moria.Asortymenty;
+using InsERT.Moria.Flagi;
 using InsERT.Moria.ModelDanych;
+using InsERT.Moria.Narzedzia.EPP.Typy;
+using InsERT.Moria.Narzedzia.PolaWlasne2;
+using InsERT.Moria.PolaWlasne;
+using InsERT.Moria.PolaWlasne2;
+using InsERT.Moria.Rozszerzanie;
 using InsERT.Moria.Sfera;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
+using SubiektNexoConnector.Core.Application.Common;
 using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Infrastructure.Abstractions;
 using SubiektNexoConnector.Infrastructure.Nexo.Common;
-using System.Text;
 
 namespace SubiektNexoConnector.Infrastructure.Nexo
 {
@@ -19,12 +26,26 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
         {
             using var sfera = _sessionFactory.Create();
             {
-                var product = sfera
-                    .Asortymenty()
-                    .Dane
-                    .WyszukajPoSymbolu(productSymbol);
+                IProstePolaWlasne prostePolaWlasne = sfera.PodajObiektTypu<IProstePolaWlasne>();
+                var product = sfera.Asortymenty().Dane.WyszukajPoSymbolu(productSymbol);
                 if (product is null)
                     return null;
+
+                var asortymentBo = sfera.Asortymenty().Znajdz(product);
+                if (asortymentBo is null)
+                    return null;
+
+                var asoPWAccessor = sfera.UtworzPolaWlasneStdAccessor(asortymentBo.Dane);
+                var advancedFields = sfera.PodajObiektTypu<IZaawansowanePolaWlasne>();
+                var hasAdvancedFields = advancedFields.SprobujPobracZaawansowanePolaWlasne(
+                    typeof(InsERT.Moria.ModelDanych.Asortyment),
+                    out var advancedFieldDefinitions);
+                var asoPW2Accessor = hasAdvancedFields
+                    ? sfera.UtworzPolaWlasneAdv2Accessor(
+                        asortymentBo.Dane,
+                        PolaWlasneAdv2AccessorFactoryNullHandlingKind.CreateReadonlyStub)
+                    : null;
+
                 return new ProductDetailsDto(
                     product.Id,
                     product.Symbol,
@@ -35,7 +56,21 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                         product.Rodzaj?.Nazwa ?? string.Empty
                     ),
                     !product.IsInRecycleBin,
+                    product.FlagaWlasna is null
+                        ? null
+                        : new FlagAssignmentDto(
+                            product.FlagaWlasna.Id,
+                            product.FlagHeader?.Description),
                     product.LiczbaDniDoRealizacjiDostawcy,
+                    NexoAdditionalFieldValueMapper.MapBasic(
+                        prostePolaWlasne,
+                        asoPWAccessor,
+                        typeof(InsERT.Moria.ModelDanych.Asortyment)),
+                    asoPW2Accessor is null
+                        ? []
+                        : NexoAdditionalFieldValueMapper.MapAdvanced(
+                            advancedFieldDefinitions,
+                            asoPW2Accessor),
                     MapDefaultSuppliers(product.DaneAsortymentuDostawcyPodstawowego),
                     product.PozycjeCennika.Select(c => new ProductPriceDto(
                         c.Cennik.Tytul,
@@ -140,7 +175,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
 
             if (!product.Zapisz())
             {
-                throw new InvalidOperationException(BuildValidationMessage(
+                throw new InvalidOperationException(NexoValidationMessageBuilder.Build(
                     "Blad dodawania produktu:",
                     product.PobierzKomunikatyBledow()));
             }
@@ -154,10 +189,18 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             if (product is null)
                 return null;
 
+            if (IsFlagOnlyPatch(command))
+            {
+                UpdateProductFlag(sfera, product.Id, command.Flag.Value);
+                return product.Symbol;
+            }
+
             using var productBo = sfera.Asortymenty().Znajdz(product);
             if (productBo is null)
                 throw new ProductUpdateFailedException("Nie znaleziono obiektu biznesowego dla produktu.");
             var isLocked = productBo.Zablokuj();
+
+            string updatedSku;
 
             try
             {
@@ -170,21 +213,86 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 if (command.EAN.HasValue)
                     UpdateProductEan(productBo, command.EAN.Value);
 
+                if (command.BasicFields.HasValue)
+                {
+                    var basicFields = sfera.PodajObiektTypu<IProstePolaWlasne>();
+                    var basicValues = sfera.UtworzPolaWlasneStdAccessor(productBo.Dane);
+
+                    NexoAdditionalFieldValueMapper.ApplyBasic(
+                        basicFields,
+                        basicValues,
+                        typeof(InsERT.Moria.ModelDanych.Asortyment),
+                        command.BasicFields.Value!);
+                }
+
+                if (command.AdvancedFields.HasValue)
+                {
+                    var advancedFields = sfera.PodajObiektTypu<IZaawansowanePolaWlasne>();
+                    if (!advancedFields.SprobujPobracZaawansowanePolaWlasne(
+                        typeof(InsERT.Moria.ModelDanych.Asortyment),
+                        out var advancedDefinitions))
+                    {
+                        throw new InvalidOperationException("Product does not support advanced fields.");
+                    }
+
+                    var advancedValues = sfera.UtworzPolaWlasneAdv2Accessor(
+                        productBo.Dane,
+                        PolaWlasneAdv2AccessorFactoryNullHandlingKind.CreateAndAttach);
+
+                    NexoAdditionalFieldValueMapper.ApplyAdvanced(
+                        advancedDefinitions,
+                        advancedValues,
+                        command.AdvancedFields.Value!);
+                }
+
                 if (!productBo.Zapisz())
                 {
-                    throw new InvalidOperationException(BuildValidationMessage(
+                    throw new InvalidOperationException(NexoValidationMessageBuilder.Build(
                         "Blad aktualizacji produktu:",
                         productBo.PobierzKomunikatyBledow()));
                 }
 
-                return productBo.Dane.Symbol;
+                updatedSku = productBo.Dane.Symbol;
             }
             finally
             {
                 if (isLocked)
                     productBo.Odblokuj();
             }
+
+            if (command.Flag.HasValue)
+                UpdateProductFlag(sfera, product.Id, command.Flag.Value);
+
+            return updatedSku;
         }
+
+        private static void UpdateProductFlag(
+            Uchwyt sfera,
+            int productId,
+            FlagAssignmentDto? flag)
+        {
+            var flags = sfera.PodajObiektTypu<IFlagiWlasne>();
+            var result = flag is null
+                ? flags.UsunFlage(typeof(InsERT.Moria.ModelDanych.Asortyment), productId)
+                : flags.NadajFlage(
+                    flag.Id,
+                    flag.Comment,
+                    typeof(InsERT.Moria.ModelDanych.Asortyment),
+                    productId);
+
+            if (!result)
+                throw new InvalidOperationException(
+                    $"Product flag update failed for product id {productId} and flag id {flag?.Id}: {result}");
+        }
+
+        private static bool IsFlagOnlyPatch(PatchProductCommand command) =>
+            command.Flag.HasValue
+            && !command.Name.HasValue
+            && !command.SKU.HasValue
+            && !command.EAN.HasValue
+            && !command.BasicFields.HasValue
+            && !command.AdvancedFields.HasValue;
+
         public DeleteProductResult Delete(DeleteProductCommand command)
         {
             using var sfera = _sessionFactory.Create();
@@ -234,24 +342,6 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             KodKreskowy productEan = new KodKreskowy { Kod = ean };
             primaryUnit.KodyKreskowe.Add(productEan);
             primaryUnit.PodstawowyKodKreskowy = productEan;
-        }
-
-        private static string BuildValidationMessage(
-            string messagePrefix,
-            IEnumerable<KomunikatWalidacji> errors)
-        {
-            StringBuilder messageBuilder = new StringBuilder(messagePrefix);
-            foreach (var error in errors)
-            {
-                var fieldNames = error.NazwyPol is null || !error.NazwyPol.Any()
-                    ? "Nieznane pole"
-                    : string.Join(", ", error.NazwyPol);
-
-                messageBuilder.AppendLine();
-                messageBuilder.Append($"{fieldNames}: {error.Tresc}");
-            }
-
-            return messageBuilder.ToString();
         }
 
         private static StockMovementDto MapStockMovement(IEnumerable<dynamic> movements, int warehouseId)

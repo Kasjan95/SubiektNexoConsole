@@ -12,6 +12,6 @@ public class NexoPartyRepositoryTests
         var sessionFactory = Substitute.For<ISessionFactory>();
         var repository = new NexoPartyRepository(sessionFactory);
 
-        Assert.Throws<ArgumentNullException>(() => repository.GetDetails(null!));
+        Assert.Throws<ArgumentNullException>(() => repository.GetDetailsParty(null!));
     }
 }

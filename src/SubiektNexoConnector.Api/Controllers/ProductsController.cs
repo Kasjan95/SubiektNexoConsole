@@ -76,7 +76,10 @@ public class ProductsController : ControllerBase
             sku,
             request.Name,
             request.SKU,
-            request.EAN);
+            request.EAN,
+            request.BasicFields,
+            request.AdvancedFields,
+            request.Flag);
 
         var updatedSku = handler.Handle(command);
         if (updatedSku is null)

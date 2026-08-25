@@ -11,7 +11,7 @@ namespace SubiektNexoConnector.Core.Application.Parties.GetPartyDetails
         }
         public PartyDetailsDto? Handle(GetPartyDetailsQuery query)
         {
-            return _repository.GetDetails(query);
+            return _repository.GetDetailsParty(query);
         }
     }
 }

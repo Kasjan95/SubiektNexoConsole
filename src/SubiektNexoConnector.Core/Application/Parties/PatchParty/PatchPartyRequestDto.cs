@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Common;
 
 namespace SubiektNexoConnector.Core.Application.Parties.PatchParty;
@@ -17,5 +18,8 @@ public sealed record PatchPartyRequestDto(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] Optional<int?> PartyGroupId = default,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] Optional<IReadOnlyCollection<int>> IndustryIds = default,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] Optional<IReadOnlyCollection<int>> FeatureIds = default,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] Optional<string?> Notes = default
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] Optional<string?> Notes = default,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] Optional<IReadOnlyCollection<AdditionalFieldValueDto>> BasicFields = default,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] Optional<IReadOnlyCollection<AdditionalFieldValueDto>> AdvancedFields = default,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)] Optional<FlagAssignmentDto?> Flag = default
 );

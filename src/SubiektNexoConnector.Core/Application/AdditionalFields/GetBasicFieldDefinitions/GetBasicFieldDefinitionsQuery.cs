@@ -1,0 +1,5 @@
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
+
+namespace SubiektNexoConnector.Core.Application.AdditionalFields.GetBasicFieldDefinitions;
+
+public sealed record GetBasicFieldDefinitionsQuery(AdditionalFieldTarget Target);

@@ -11,7 +11,7 @@ namespace SubiektNexoConnector.Core.Application.Parties.CreateParty
         }
         public PartyDetailsDto Handle(CreatePartyCommand command)
         {
-            return _repository.Create(command);
+            return _repository.CreateParty(command);
         }
     }
 }

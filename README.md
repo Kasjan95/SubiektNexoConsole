@@ -1,62 +1,131 @@
 # SubiektNexoConnector
 
-Local REST adapter for InsERT nexo. The project exposes selected nexo resources through an ASP.NET Core API so they can be consumed from tools and integrations that do not use the nexo SDK directly.
+SubiektNexoConnector is a local REST adapter for InsERT nexo. It keeps the vendor-specific SDK and Sfera integration in .NET, while exposing a smaller HTTP contract for scripts, automation tools and applications that should not depend on the nexo object model directly.
 
-The connector is in active development. The current scope focuses on read scenarios around products, warehouses, stock and price data.
+The connector currently supports product, warehouse and party workflows. In addition to reads, it exposes selected write operations, nested party addresses and contacts, custom field values, custom field definitions and flags.
 
-## Purpose
+## Key Capabilities
 
-InsERT nexo integrations are naturally built in .NET/C# through the nexo SDK and Sfera APIs. This project keeps that integration layer in C#, then exposes a small local HTTP API for other runtimes, scripts, automation tools or local AI-assisted workflows.
+- Product listing, search, details, creation, partial updates and deletion.
+- Warehouse listing and product stock details for a selected warehouse.
+- Party listing, search, details, creation and partial updates.
+- Address and contact management as nested party resources.
+- Basic and advanced custom field values on products and parties.
+- Discovery of basic field, advanced field, dictionary and flag definitions.
+- Flag assignment and removal through product and party PATCH requests.
+- API key authentication, RFC 7807-style problem responses and Swagger UI.
+- Application and HTTP-level tests that do not require a live nexo database.
 
-## Architecture Notes
+## Why This Adapter Exists
 
-Architectural decisions, domain trade-offs and future directions are documented in Polish here:
+InsERT nexo integrations are naturally built in C# through the nexo SDK and Sfera APIs. Many consumers, however, only need a stable local HTTP boundary and should not know how nexo sessions, business objects, locks, validation messages or custom field accessors work.
 
-- [docs/decyzje-architektoniczne.md](docs/decyzje-architektoniczne.md)
+This project translates between those two worlds. Public DTOs stay independent of the vendor model, while the infrastructure layer owns session management, nexo mapping, object locking and persistence.
 
-The document also includes a short English summary.
+More detailed trade-offs are documented in Polish in [docs/decyzje-architektoniczne.md](docs/decyzje-architektoniczne.md).
 
 ## Current API Surface
 
-- `GET /products`
-- `GET /products/{sku}`
-- `GET /warehouses`
-- `GET /warehouses/{symbol}/products/{sku}`
+### Products
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/products` | Create a product. |
+| `GET` | `/products` | List and search products with pagination. |
+| `GET` | `/products/{sku}` | Get product details, prices, stock, suppliers, flags and custom fields. |
+| `PATCH` | `/products/{sku}` | Partially update product data, custom fields or flag assignment. |
+| `DELETE` | `/products/{sku}` | Delete a product when nexo allows it. |
+
+The product list accepts `search`, `page` and `pageSize` query parameters.
+
+### Warehouses
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/warehouses` | List warehouses. |
+| `GET` | `/warehouses/{symbol}/products/{sku}` | Get stock information for a product in a selected warehouse. |
+
+### Parties
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/parties` | Create a party, optionally with addresses and contacts. |
+| `GET` | `/parties` | List and search parties with filtering and pagination. |
+| `GET` | `/parties/create-options` | Get party types and reference data required by create forms. |
+| `GET` | `/parties/{partySignature}` | Get party details, addresses, contacts, trade credit limits, flags and custom fields. |
+| `PATCH` | `/parties/{partySignature}` | Partially update party data, custom fields or flag assignment. |
+
+The party list accepts `customerStatus`, `type`, `search`, `page` and `pageSize` query parameters.
+
+### Party Addresses
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/parties/{partySignature}/addresses` | Add an address or update the primary address. |
+| `PATCH` | `/parties/{partySignature}/addresses/{addressId}` | Partially update an address. |
+| `DELETE` | `/parties/{partySignature}/addresses/{addressId}` | Delete an address when nexo allows it. |
+
+### Party Contacts
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `POST` | `/parties/{partySignature}/contacts` | Add a contact. |
+| `PATCH` | `/parties/{partySignature}/contacts/{contactId}` | Partially update a contact. |
+| `DELETE` | `/parties/{partySignature}/contacts/{contactId}` | Delete a contact. |
+
+### Custom Field and Flag Definitions
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| `GET` | `/Additional-field-definitions/basic?target={target}` | Get basic custom field definitions for `product` or `party`. |
+| `GET` | `/Additional-field-definitions/advanced?target={target}` | Get advanced field definitions, groups and supported dictionary values. |
+| `GET` | `/Additional-field-definitions/flags` | Get flag definitions grouped by domain. An optional `domain` query parameter narrows the result. |
+
+Custom field values are returned in product and party details. They can be updated by sending `basicFields` or `advancedFields` in the corresponding PATCH request. A flag can be assigned, updated or removed through the `flag` property.
+
+## PATCH Semantics
+
+PATCH request DTOs distinguish an omitted property from an explicitly supplied `null` value:
+
+- omitted property: keep the current value,
+- non-null value: update the field,
+- explicit `null`: clear a nullable field,
+- empty PATCH body: return `400 Bad Request`.
+
+Text values and identifier collections are normalized and validated before the infrastructure repository is called. Errors are returned as JSON problem details.
 
 ## Solution Structure
 
-- `SubiektNexoConnector.Api` - ASP.NET Core REST API and Swagger UI.
-- `SubiektNexoConnector.Core` - application handlers, repository interfaces and DTOs.
-- `SubiektNexoConnector.Infrastructure` - nexo SDK/Sfera integration and configuration binding.
-- `SubiektNexoConnector.Console` - additional local entry point for quick checks and a potential starting point for a future worker or message-driven process.
+- `SubiektNexoConnector.Api` - ASP.NET Core controllers, authentication, error handling and Swagger configuration.
+- `SubiektNexoConnector.Core` - use-case handlers, repository interfaces, commands, queries and public DTOs.
+- `SubiektNexoConnector.Infrastructure` - nexo SDK/Sfera integration, mapping, locking, persistence and configuration binding.
+- `SubiektNexoConnector.Console` - a small local entry point for quick SDK-backed checks.
+- `SubiektNexoConnector.Core.Tests` - application-layer unit tests.
+- `SubiektNexoConnector.Api.Tests` - controller and HTTP contract tests based on `WebApplicationFactory` and substituted repositories.
 
 ## Requirements
 
 - Windows
-- .NET 8 SDK
+- .NET 8 SDK or newer
 - InsERT nexo installed locally
-- InsERT nexo SDK version compatible with the target nexo database
+- InsERT nexo SDK compatible with the target nexo database
 
-SDK packages are available from:
-
-https://ftp.insertcdn.pl/pub/aktualizacje/InsERT_nexo/
+SDK packages are available from [the official InsERT nexo download directory](https://ftp.insertcdn.pl/pub/aktualizacje/InsERT_nexo/).
 
 ## SDK Path
 
-The projects read the nexo SDK path from the `NEXO_SDK_PATH` environment variable. Set it to the SDK root directory, not to the `Bin` directory.
-
-Example:
+The projects read the nexo SDK path from the `NEXO_SDK_PATH` environment variable. Set it to the SDK root directory, not to its `Bin` directory.
 
 ```powershell
-setx NEXO_SDK_PATH "C:\path\to\nexoSDK_59.1.1.9137"
+setx NEXO_SDK_PATH "C:\path\to\nexoSDK"
 ```
 
-After using `setx`, restart PowerShell or Visual Studio so the new environment variable is visible to build tools.
+After using `setx`, restart PowerShell or Visual Studio so the variable is available to build tools.
 
-For a single build, you can also pass the path directly:
+For a single build, the path can also be supplied directly:
 
 ```powershell
-dotnet build -p:NexoSdkPath="C:\path\to\nexoSDK_59.1.1.9137"
+dotnet build -p:NexoSdkPath="C:\path\to\nexoSDK"
 ```
 
 ## Configuration
@@ -67,9 +136,9 @@ Copy the template configuration and fill in local nexo connection values:
 Copy-Item src\SubiektNexoConnector.Api\appsettings.template.json src\SubiektNexoConnector.Api\appsettings.json
 ```
 
-`appsettings.json` is ignored by Git and should stay local, because it may contain database names and credentials.
+`appsettings.json` is ignored by Git and should stay local because it may contain database names and credentials.
 
-The API uses API key authentication by default. Keep the key out of committed files and provide it with an environment variable:
+The API uses API key authentication by default. Keep the key out of committed files and provide it through an environment variable:
 
 ```powershell
 $env:SUBIEKT_NEXO_CONNECTOR_API_KEY = "replace-with-a-local-secret"
@@ -81,7 +150,7 @@ Requests must include the key in the configured header:
 X-Api-Key: replace-with-a-local-secret
 ```
 
-For local development only, API authentication can be disabled with:
+For local development only, authentication can be disabled with:
 
 ```json
 "Auth": {
@@ -89,49 +158,63 @@ For local development only, API authentication can be disabled with:
 }
 ```
 
-The template configuration also includes Serilog setup with console output and a Seq sink at `http://localhost:5341`.
+The template also configures Serilog console logging and an optional Seq sink at `http://localhost:5341`.
 
 ## Running Locally
 
-To run the API with connection settings from `appsettings.json`, pass the `--config` flag:
+To use connection settings from `appsettings.json`, pass the `--config` flag:
 
 ```powershell
 dotnet run --project src\SubiektNexoConnector.Api\SubiektNexoConnector.Api.csproj -- --config
 ```
 
-Swagger UI is available at:
+Without `--config`, the connector uses the standard connection flow supplied by the nexo SDK.
+
+In the Development environment, Swagger UI is available at one of the URLs configured by the selected launch profile, for example:
 
 ```text
 https://localhost:7214/swagger
-```
-
-or, depending on the selected launch profile:
-
-```text
 http://localhost:5151/swagger
 ```
 
-Without `--config`, the connector uses the standard nexo SDK-provided connection flow.
+## Testing
+
+Run application-layer tests without a live nexo database:
+
+```powershell
+dotnet test tests\SubiektNexoConnector.Core.Tests\SubiektNexoConnector.Core.Tests.csproj
+```
+
+With `NEXO_SDK_PATH` configured, run the complete solution test suite:
+
+```powershell
+dotnet test SubiektNexoConnector.sln
+```
+
+The API tests start the ASP.NET Core pipeline in memory and replace infrastructure repositories with test doubles. They verify routing, serialization, status codes, validation and problem responses without modifying nexo data.
 
 ## Console Entry Point
 
-The console project is a small local entry point for quick checks against the same infrastructure layer:
+The console project resolves the same infrastructure services and can be used for quick local checks:
 
 ```powershell
 dotnet run --project src\SubiektNexoConnector.Console\SubiektNexoConnector.Console.csproj -- --config
 ```
 
-At the moment it resolves warehouses and prints their symbols and names.
+It currently resolves warehouses and prints their symbols and names.
 
-## Publishing And Installation
+## Current Limitations
 
-Running the API from source is intended for local development. Installing a packaged nexo solution requires the tooling and launcher integration described in the InsERT nexo SDK documentation. The published output must be prepared with the SDK tooling and added to the nexo launcher files according to that documentation.
+- The connector is Windows-only because the nexo SDK and Sfera runtime are Windows-specific.
+- Requests currently use live SDK sessions; there is no cache layer yet.
+- Repository operations are synchronous because they wrap synchronous vendor APIs.
+- The public surface intentionally covers selected integration scenarios rather than the entire nexo model.
+- Packaging and launcher integration still require the tooling described in the InsERT nexo SDK documentation.
 
 ## Roadmap
 
 - Cache for expensive read scenarios and slower SDK-backed endpoints.
-- Separate worker for refresh jobs, exports and future asynchronous flows.
-- More resources and eventual write-oriented scenarios beyond the current `GET` endpoints.
-- Better API shaping through filtering, pagination and lighter response models.
-- Deeper observability around integration flow, including `live` vs `cache` responses.
-- Concurrency checks around nexo/Sfera session usage if the SDK requires stricter serialization.
+- A worker for refresh jobs, exports and asynchronous integration flows.
+- Broader reference-data and document-related resources.
+- More infrastructure-level verification against a controlled nexo test environment.
+- Improved observability for live SDK calls, locks and validation failures.

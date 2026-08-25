@@ -20,11 +20,11 @@ public sealed record CreatePartyCommand(
     IReadOnlyCollection<int> FeatureIds,
     string? Notes,
 
-    IReadOnlyCollection<CreatePartyAddressCommand> Addresses,
-    IReadOnlyCollection<CreatePartyContactCommand> Contacts
+    IReadOnlyCollection<PartyAddressInput> Addresses,
+    IReadOnlyCollection<PartyContactInput> Contacts
 );
 
-public sealed record CreatePartyAddressCommand(
+public sealed record PartyAddressInput(
     int AddressTypeId,
     string? Street,
     string? HouseNumber,
@@ -34,7 +34,7 @@ public sealed record CreatePartyAddressCommand(
     int? CountryId
 );
 
-public sealed record CreatePartyContactCommand(
+public sealed record PartyContactInput(
     int ContactTypeId,
     string? Value,
     bool IsPrimary,

@@ -1,6 +1,10 @@
 using InsERT.Moria.ModelDanych;
 using InsERT.Moria.Klienci;
+using InsERT.Moria.Flagi;
+using InsERT.Moria.Narzedzia.PolaWlasne2;
+using InsERT.Moria.PolaWlasne2;
 using InsERT.Moria.Sfera;
+using SubiektNexoConnector.Core.Application.Common;
 using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
@@ -8,7 +12,14 @@ using SubiektNexoConnector.Core.Application.Parties.PatchParty;
 using SubiektNexoConnector.Core.Application.Parties.Shared;
 using SubiektNexoConnector.Infrastructure.Abstractions;
 using SubiektNexoConnector.Infrastructure.Nexo.Common;
-using System.Text;
+using SubiektNexoConnector.Core.Application.Parties.Addresses.Shared;
+using SubiektNexoConnector.Core.Application.Parties.Addresses.CreateAddress;
+using SubiektNexoConnector.Core.Application.Parties.Addresses.PatchAddress;
+using SubiektNexoConnector.Core.Application.Parties.Addresses.DeleteAddress;
+using SubiektNexoConnector.Core.Application.Parties.Contacts.Shared;
+using SubiektNexoConnector.Core.Application.Parties.Contacts.CreateContact;
+using SubiektNexoConnector.Core.Application.Parties.Contacts.DeleteContact;
+using SubiektNexoConnector.Core.Application.Parties.Contacts.PatchContact;
 
 namespace SubiektNexoConnector.Infrastructure.Nexo
 {
@@ -22,7 +33,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             _sessionFactory = sessionFactory;
         }
         #region GET
-        public IReadOnlyCollection<PartyBasicDto> GetAll(GetPartiesQuery query)
+        public IReadOnlyCollection<PartyBasicDto> GetAllParties(GetPartiesQuery query)
         {
             ArgumentNullException.ThrowIfNull(query);
 
@@ -47,20 +58,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             var mappedParties = parties
                 .OrderBy(a => a.Id)
                 .ToList()
-                .Select(a => new PartyBasicDto(
-                    a.Sygnatura.PelnaSygnatura,
-                    a.NazwaSkrocona,
-                    a.Typ,
-                    a.Podtyp,
-                    PartyCodeDictionary.GetTypeName(a.Typ),
-                    a.PobierzNazweGrupyTypu(),
-                    (int)a.StatusKlienta,
-                    PartyCodeDictionary.GetCustomerStatusName((int)a.StatusKlienta),
-                    a.NIP,
-                    a.Aktywny,
-                    a.Osoba?.Imie,
-                    a.Osoba?.Nazwisko,
-                    a.Firma?.Nazwa));
+                .Select(NexoPartyMapper.MapBasic);
 
             if (!string.IsNullOrWhiteSpace(query.Search))
             {
@@ -123,7 +121,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                     .ToList());
         }
 
-        public PartyDetailsDto? GetDetails(GetPartyDetailsQuery query)
+        public PartyDetailsDto? GetDetailsParty(GetPartyDetailsQuery query)
         {
             ArgumentNullException.ThrowIfNull(query);
             using Uchwyt sfera = _sessionFactory.Create();
@@ -131,35 +129,26 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             if (party == null)
                 return null;
 
-            List<PartyAddressDto> addresses = party.Adresy.Select(a => new PartyAddressDto(
-                a.Id,
-                a.Szczegoly.Ulica,
-                a.Szczegoly.NrDomu,
-                a.Szczegoly.NrLokalu,
-                a.Szczegoly.Miejscowosc,
-                a.Szczegoly.Gmina?.Nazwa,
-                a.Szczegoly.Wojewodztwo?.Nazwa,
-                a.Panstwo?.Nazwa,
-                a.TypAdresu.Nazwa,
-                a.TypAdresu.Id)).ToList();
+            var partyBo = sfera.Podmioty().Znajdz(party);
+            if (partyBo is null)
+                return null;
 
-            TradeCreditLimitDto tradeCreditLimit = new TradeCreditLimitDto(
-                party.ZezwalajNaKredytKupiecki,
-                party.MaksymalnyTerminPlatnosciKredytu,
-                party.MaksymalnyLiczbaDniSpoznien,
-                party.MaksymalnaLiczbaNiesplaconychDok,
-                party.LimitKredytuKupieckiego,
-                MapDocumentTradeCreditLimit(party.LimitKredytuNaSprzedazyAktywny, party.LimitKredytuNaSprzedazy),
-                MapDocumentTradeCreditLimit(party.LimitKredytuNaWydaniuAktywny, party.LimitKredytuNaWydaniu),
-                MapDocumentTradeCreditLimit(party.LimitKredytuNaZamowieniuAktywny, party.LimitKredytuNaZamowieniu));
+            var basicFieldDefinitions = sfera.PodajObiektTypu<IProstePolaWlasne>();
+            var basicFieldValues = sfera.UtworzPolaWlasneStdAccessor(partyBo.Dane);
 
-            List<PartyContactDto> contacts = party.Kontakty.Select(c => new PartyContactDto(
-                c.Id,
-                c.Podstawowy,
-                c.Rodzaj.Id,
-                c.Rodzaj.Nazwa,
-                c.Wartosc,
-                c.Komentarz)).ToList();
+            var advancedFields = sfera.PodajObiektTypu<IZaawansowanePolaWlasne>();
+            var hasAdvancedFields = advancedFields.SprobujPobracZaawansowanePolaWlasne(
+                typeof(Podmiot),
+                out var advancedFieldDefinitions);
+            var advancedFieldValues = hasAdvancedFields
+                ? sfera.UtworzPolaWlasneAdv2Accessor(
+                    partyBo.Dane,
+                    PolaWlasneAdv2AccessorFactoryNullHandlingKind.CreateReadonlyStub)
+                : null;
+
+            List<PartyAddressDto> addresses = party.Adresy.Select(NexoPartyMapper.MapAddress).ToList();
+            TradeCreditLimitDto tradeCreditLimit = NexoPartyMapper.MapTradeCreditLimit(party);
+            List<PartyContactDto> contacts = party.Kontakty.Select(NexoPartyMapper.MapContact).ToList();
 
             return new PartyDetailsDto(
                 party.Sygnatura.PelnaSygnatura,
@@ -178,44 +167,27 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 party.Branze.Select(industry => industry.Nazwa).ToList(),
                 party.Cechy.Select(c => c.Nazwa).ToList(),
                 party.Uwagi,
+                party.FlagaWlasna is null
+                    ? null
+                    : new FlagAssignmentDto(
+                        party.FlagaWlasna.Id,
+                        party.FlagHeader?.Description),
+                NexoAdditionalFieldValueMapper.MapBasic(
+                    basicFieldDefinitions,
+                    basicFieldValues,
+                    typeof(Podmiot)),
+                advancedFieldValues is null
+                    ? []
+                    : NexoAdditionalFieldValueMapper.MapAdvanced(
+                        advancedFieldDefinitions,
+                        advancedFieldValues),
                 addresses,
                 contacts,
                 tradeCreditLimit);
         }
-        
-
-        private static string BuildValidationMessage(
-            string messagePrefix,
-            IEnumerable<KomunikatWalidacji> errors)
-        {
-            StringBuilder messageBuilder = new(messagePrefix);
-
-            foreach (var error in errors)
-            {
-                var fieldNames = error.NazwyPol is null || !error.NazwyPol.Any()
-                    ? "Unknown field"
-                    : string.Join(", ", error.NazwyPol);
-
-                messageBuilder.AppendLine();
-                messageBuilder.Append($"{fieldNames}: {error.Tresc}");
-            }
-
-            return messageBuilder.ToString();
-        }
-        private DocumentTradeCreditLimitDto MapDocumentTradeCreditLimit(bool active, LimitKredytuKupieckiego? limit)
-        {
-            if (!active || limit is null)
-                return new DocumentTradeCreditLimitDto(false, null, null, null);
-
-            return new DocumentTradeCreditLimitDto(
-                true,
-                limit.Wartosc,
-                limit.LimitPonizejWartosci,
-                limit.LimitPowyzejWartosci);
-        }
         #endregion
         #region PATCH
-        public string? Patch(PatchPartyCommand command)
+        public string? PatchParty(PatchPartyCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
 
@@ -225,7 +197,17 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             if (partyBo is null)
                 return null;
 
+            if (IsFlagOnlyPatch(command))
+            {
+                UpdatePartyFlag(sfera, partyBo.Dane.Id, command.Flag.Value);
+                return partyBo.Dane.Sygnatura.PelnaSygnatura;
+            }
+
             var isLocked = partyBo.Zablokuj();
+            if (!isLocked)
+                throw new InvalidOperationException("Party could not be locked for update.");
+
+            string updatedSignature;
 
             try
             {
@@ -264,20 +246,179 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 if (command.FeatureIds.HasValue)
                     SetFeatures(sfera, party, command.FeatureIds.Value!);
 
+                if (command.BasicFields.HasValue)
+                {
+                    var basicFields = sfera.PodajObiektTypu<IProstePolaWlasne>();
+                    var basicValues = sfera.UtworzPolaWlasneStdAccessor(party);
+
+                    NexoAdditionalFieldValueMapper.ApplyBasic(
+                        basicFields,
+                        basicValues,
+                        typeof(Podmiot),
+                        command.BasicFields.Value!);
+                }
+
+                if (command.AdvancedFields.HasValue)
+                {
+                    var advancedFields = sfera.PodajObiektTypu<IZaawansowanePolaWlasne>();
+                    if (!advancedFields.SprobujPobracZaawansowanePolaWlasne(
+                        typeof(Podmiot),
+                        out var advancedDefinitions))
+                    {
+                        throw new InvalidOperationException("Party does not support advanced fields.");
+                    }
+
+                    var advancedValues = sfera.UtworzPolaWlasneAdv2Accessor(
+                        party,
+                        PolaWlasneAdv2AccessorFactoryNullHandlingKind.CreateAndAttach);
+
+                    NexoAdditionalFieldValueMapper.ApplyAdvanced(
+                        advancedDefinitions,
+                        advancedValues,
+                        command.AdvancedFields.Value!);
+                }
+
                 if (!partyBo.Zapisz())
                 {
-                    throw new InvalidOperationException(BuildValidationMessage(
+                    throw new InvalidOperationException(NexoValidationMessageBuilder.Build(
                         "Party update failed:",
                         partyBo.PobierzKomunikatyBledow()));
                 }
 
-                return party.Sygnatura.PelnaSygnatura;
+                updatedSignature = party.Sygnatura.PelnaSygnatura;
             }
             finally
             {
                 if (isLocked)
                     partyBo.Odblokuj();
             }
+
+            if (command.Flag.HasValue)
+                UpdatePartyFlag(sfera, partyBo.Dane.Id, command.Flag.Value);
+
+            return updatedSignature;
+        }
+        public PartyAddressDto? PatchPartyAddress(PatchPartyAddressCommand command)
+        {
+            ArgumentNullException.ThrowIfNull(command);
+            using Uchwyt sfera = _sessionFactory.Create();
+            using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
+            if (partyBo is null)
+                return null;
+            var party = partyBo.Dane;
+            var address = party.Adresy.SingleOrDefault(item => item.Id == command.AddressId);
+            if (address is null)
+                return null;
+
+            if (!partyBo.Zablokuj())
+                throw new InvalidOperationException("Party could not be locked for address update.");
+
+            try
+            {
+                if (command.Street.HasValue)
+                    address.Szczegoly.Ulica = command.Street.Value ?? string.Empty;
+                if (command.HouseNumber.HasValue)
+                    address.Szczegoly.NrDomu = command.HouseNumber.Value ?? string.Empty;
+                if (command.ApartmentNumber.HasValue)
+                    address.Szczegoly.NrLokalu = command.ApartmentNumber.Value ?? string.Empty;
+                if (command.PostalCode.HasValue)
+                    address.Szczegoly.KodPocztowy = command.PostalCode.Value ?? string.Empty;
+                if (command.City.HasValue)
+                    address.Szczegoly.Miejscowosc = command.City.Value ?? string.Empty;
+                if (command.CountryId.HasValue)
+                {
+                    if (command.CountryId.Value is null)
+                    {
+                        address.Panstwo = null;
+                    }
+                    else
+                    {
+                        var country = sfera.Panstwa().Dane.Pierwszy(c => c.Id == command.CountryId.Value.Value)
+                            ?? throw new InvalidOperationException($"Country with ID '{command.CountryId.Value}' was not found.");
+                        address.Panstwo = country;
+                    }
+                }
+                if (!partyBo.Zapisz())
+                {
+                    throw new InvalidOperationException(NexoValidationMessageBuilder.Build(
+                        "Party address update failed:",
+                        partyBo.PobierzKomunikatyBledow()));
+                }
+                return NexoPartyMapper.MapAddress(address);
+            }
+            finally
+            {
+                partyBo.Odblokuj();
+            }
+        }
+        public PartyContactDto? PatchPartyContact(PatchPartyContactCommand command)
+        {
+            ArgumentNullException.ThrowIfNull(command);
+            using Uchwyt sfera = _sessionFactory.Create();
+            using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
+            if (partyBo is null)
+                return null;
+
+            var contact = partyBo.Dane.Kontakty.SingleOrDefault(item => item.Id == command.ContactId);
+            if (contact is null)
+                return null;
+
+            if (!partyBo.Zablokuj())
+                throw new InvalidOperationException("Party could not be locked for contact update.");
+
+            try
+            {
+                if (command.ContactValue.HasValue)
+                    contact.Wartosc = command.ContactValue.Value ?? string.Empty;
+                if (command.IsPrimary.HasValue)
+                    contact.Podstawowy = command.IsPrimary.Value;
+                if (command.ContactDescription.HasValue)
+                    contact.Komentarz = command.ContactDescription.Value ?? string.Empty;
+                if (!partyBo.Zapisz())
+                {
+                    throw new InvalidOperationException(NexoValidationMessageBuilder.Build(
+                        "Party contact update failed:",
+                        partyBo.PobierzKomunikatyBledow()));
+                }
+                return NexoPartyMapper.MapContact(contact);
+            }
+            finally
+            {
+                partyBo.Odblokuj();
+            }
+        }
+        private static bool IsFlagOnlyPatch(PatchPartyCommand command) =>
+            command.Flag.HasValue
+            && !command.Signature.HasValue
+            && !command.DisplayName.HasValue
+            && !command.IsActive.HasValue
+            && !command.FirstName.HasValue
+            && !command.LastName.HasValue
+            && !command.CompanyName.HasValue
+            && !command.TaxId.HasValue
+            && !command.EuTaxId.HasValue
+            && !command.BusinessRegistryNumber.HasValue
+            && !command.NationalCourtRegisterNumber.HasValue
+            && !command.PartyGroupId.HasValue
+            && !command.IndustryIds.HasValue
+            && !command.FeatureIds.HasValue
+            && !command.Notes.HasValue
+            && !command.BasicFields.HasValue
+            && !command.AdvancedFields.HasValue;
+
+        private static void UpdatePartyFlag(
+            Uchwyt sfera,
+            int partyId,
+            FlagAssignmentDto? flag)
+        {
+            var flags = sfera.PodajObiektTypu<IFlagiWlasne>();
+            var result = flag is null
+                ? flags.UsunFlage(typeof(Podmiot), partyId)
+                : flags.NadajFlage(flag.Id, flag.Comment, typeof(Podmiot), partyId);
+
+            if (!result)
+                throw new InvalidOperationException(
+                    $"Party flag update failed for party id {partyId} and flag id {flag?.Id}: {result}");
         }
 
         private static void UpdatePerson(Podmiot party, PatchPartyCommand command)
@@ -319,7 +460,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
 
         #endregion
         #region POST
-        public PartyDetailsDto Create(CreatePartyCommand command)
+        public PartyDetailsDto CreateParty(CreatePartyCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
             using Uchwyt sfera = _sessionFactory.Create();
@@ -377,12 +518,70 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             AddContacts(sfera, party, command.Contacts);
             if (!partyBo.Zapisz())
             {
-                throw new InvalidOperationException(BuildValidationMessage(
+                throw new InvalidOperationException(NexoValidationMessageBuilder.Build(
                     "Party creation failed:",
                     partyBo.PobierzKomunikatyBledow()));
             }
             partyBo.Odblokuj();
-            return GetDetails(new GetPartyDetailsQuery(party.Sygnatura.PelnaSygnatura))!;
+            return GetDetailsParty(new GetPartyDetailsQuery(party.Sygnatura.PelnaSygnatura))!;
+        }
+        public CreatePartyAddressResult? CreatePartyAddress(CreatePartyAddressCommand command)
+        {
+            ArgumentNullException.ThrowIfNull(command);
+            using Uchwyt sfera = _sessionFactory.Create();
+            using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
+            if (partyBo is null)
+                return null;
+            var party = partyBo.Dane;
+
+            if (!partyBo.Zablokuj())
+                throw new InvalidOperationException("Party could not be locked for address creation.");
+
+            try
+            {
+                var primaryAddressTypeId = sfera.TypyAdresu().DaneDomyslne.Glowny.Id;
+                var isCreated = command.Address.AddressTypeId != primaryAddressTypeId || party.AdresPodstawowy is null;
+                var address = AddAddresses(sfera, partyBo, party, [command.Address]).Single();
+                if (!partyBo.Zapisz())
+                {
+                    throw new InvalidOperationException(NexoValidationMessageBuilder.Build(
+                        "Party address creation failed:",
+                        partyBo.PobierzKomunikatyBledow()));
+                }
+                return new CreatePartyAddressResult(NexoPartyMapper.MapAddress(address), isCreated);
+            }
+            finally
+            {
+                partyBo.Odblokuj();
+            }
+        }
+        public PartyContactDto? CreatePartyContact(CreatePartyContactCommand command)
+        {
+            ArgumentNullException.ThrowIfNull(command);
+            using Uchwyt sfera = _sessionFactory.Create();
+            using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
+            if (partyBo is null)
+                return null;
+            var party = partyBo.Dane;
+
+            if (!partyBo.Zablokuj())
+                throw new InvalidOperationException("Party could not be locked for contact creation.");
+
+            try
+            {
+                AddContacts(sfera, party, [command.Contact]);
+                if (!partyBo.Zapisz())
+                {
+                    throw new InvalidOperationException(NexoValidationMessageBuilder.Build(
+                        "Party contact creation failed:",
+                        partyBo.PobierzKomunikatyBledow()));
+                }
+                return NexoPartyMapper.MapContact(party.Kontakty.Last());
+            }
+            finally
+            {
+                partyBo.Odblokuj();
+            }
         }
 
         private static void SetPartyGroup(Uchwyt sfera, Podmiot party, int? partyGroupId)
@@ -398,10 +597,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             party.Grupy.Add(partyGroup);
         }
 
-        private static void SetIndustries(
-            Uchwyt sfera,
-            Podmiot party,
-            IReadOnlyCollection<int> industryIds)
+        private static void SetIndustries(Uchwyt sfera, Podmiot party, IReadOnlyCollection<int> industryIds)
         {
             var ids = industryIds.Distinct().ToHashSet();
             var industries = sfera.Branze().Dane.Wszystkie(industry => ids.Contains(industry.Id)).ToList();
@@ -415,10 +611,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 party.Branze.Add(industry);
         }
 
-        private static void SetFeatures(
-            Uchwyt sfera,
-            Podmiot party,
-            IReadOnlyCollection<int> featureIds)
+        private static void SetFeatures(Uchwyt sfera, Podmiot party, IReadOnlyCollection<int> featureIds)
         {
             var ids = featureIds.Distinct().ToHashSet();
             var features = sfera.Cechy().Dane.Wszystkie(feature => ids.Contains(feature.Id)).ToList();
@@ -432,13 +625,10 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 party.Cechy.Add(feature);
         }
 
-        private static void AddAddresses(
-            Uchwyt sfera,
-            IPodmiot partyBo,
-            Podmiot party,
-            IReadOnlyCollection<CreatePartyAddressCommand> addresses)
+        private static IReadOnlyCollection<Adres> AddAddresses(Uchwyt sfera, IPodmiot partyBo, Podmiot party, IReadOnlyCollection<PartyAddressInput> addresses)
         {
             var addressTypes = sfera.TypyAdresu();
+            var addedAddresses = new List<Adres>();
 
             foreach (var command in addresses)
             {
@@ -460,13 +650,14 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                     address.Panstwo = sfera.Panstwa().Dane.Pierwszy(country => country.Id == command.CountryId.Value)
                         ?? throw new InvalidOperationException($"Country '{command.CountryId}' was not found.");
                 }
+
+                addedAddresses.Add(address);
             }
+
+            return addedAddresses;
         }
 
-        private static void AddContacts(
-            Uchwyt sfera,
-            Podmiot party,
-            IReadOnlyCollection<CreatePartyContactCommand> contacts)
+        private static void AddContacts(Uchwyt sfera, Podmiot party, IReadOnlyCollection<PartyContactInput> contacts)
         {
             foreach (var command in contacts)
             {
@@ -481,7 +672,74 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 contact.Komentarz = command.Comment ?? string.Empty;
             }
         }
+        #endregion
+        #region DELETE
+        public DeletePartyResourceResult DeletePartyAddress(DeletePartyAddressCommand command)
+        {
+            ArgumentNullException.ThrowIfNull(command);
+            using Uchwyt sfera = _sessionFactory.Create();
+            using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
+            if (partyBo is null)
+                return DeletePartyResourceResult.NotFound;
 
+            var address = partyBo.Dane.Adresy.SingleOrDefault(item => item.Id == command.AddressId);
+            if (address == null)
+                return DeletePartyResourceResult.NotFound;
+
+            if (!partyBo.Zablokuj())
+            {
+                throw new InvalidOperationException("Party could not be locked for address deletion.");
+            }
+
+            try
+            {
+                partyBo.UsunAdres(address);
+                if (!partyBo.Zapisz())
+                {
+                    throw new InvalidOperationException(NexoValidationMessageBuilder.Build(
+                        "Party address deletion failed:",
+                        partyBo.PobierzKomunikatyBledow()));
+                }
+                return DeletePartyResourceResult.Deleted;
+            }
+            finally
+            {
+                partyBo.Odblokuj();
+            }
+        }
+        public DeletePartyResourceResult DeletePartyContact(DeletePartyContactCommand command)
+        {
+            ArgumentNullException.ThrowIfNull(command);
+            using Uchwyt sfera = _sessionFactory.Create();
+            using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
+            if (partyBo is null)
+                return DeletePartyResourceResult.NotFound;
+
+            var contact = partyBo.Dane.Kontakty.SingleOrDefault(item => item.Id == command.ContactId);
+            if (contact == null)
+                return DeletePartyResourceResult.NotFound;
+
+            if (!partyBo.Zablokuj())
+            {
+                throw new InvalidOperationException("Party could not be locked for contact deletion.");
+            }
+
+            try
+            {
+                partyBo.UsunKontakt(contact);
+                if (!partyBo.Zapisz())
+                {
+                    throw new InvalidOperationException(NexoValidationMessageBuilder.Build(
+                        "Party contact deletion failed:",
+                        partyBo.PobierzKomunikatyBledow()));
+                }
+                return DeletePartyResourceResult.Deleted;
+            }
+            finally
+            {
+                partyBo.Odblokuj();
+            }
+        }
         #endregion
     }
 }
