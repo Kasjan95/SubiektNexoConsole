@@ -9,8 +9,8 @@ public class NexoPartyRepositoryTests
     [Fact]
     public void GetDetails_ThrowsArgumentNullException_WhenQueryIsNull()
     {
-        var sessionFactory = Substitute.For<ISessionFactory>();
-        var repository = new NexoPartyRepository(sessionFactory);
+        var sferaExecutor = Substitute.For<ISferaExecutor>();
+        var repository = new NexoPartyRepository(sferaExecutor);
 
         Assert.Throws<ArgumentNullException>(() => repository.GetDetailsParty(null!));
     }

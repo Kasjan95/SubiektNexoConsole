@@ -14,18 +14,19 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
 {
     public sealed class NexoAdditionalFieldDefinitionsRepository : IAdditionalFieldDefinitionRepository
     {
-        private readonly ISessionFactory _sessionFactory;
+        private readonly ISferaExecutor _sferaExecutor;
 
-        public NexoAdditionalFieldDefinitionsRepository(ISessionFactory sessionFactory)
+        public NexoAdditionalFieldDefinitionsRepository(ISferaExecutor sferaExecutor)
         {
-            _sessionFactory = sessionFactory;
+            _sferaExecutor = sferaExecutor;
         }
 
         public AdvancedFieldDefinitionsDto GetAdvancedFieldDefinitions(GetAdvancedFieldDefinitionsQuery query)
         {
             ArgumentNullException.ThrowIfNull(query);
 
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             var fields = sfera.PodajObiektTypu<IZaawansowanePolaWlasne>();
             var entityType = GetEntityType(query.Target);
 
@@ -62,14 +63,16 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 .Select(field => field.Definition)
                 .ToList();
 
-            return new AdvancedFieldDefinitionsDto(query.Target, groups, ungroupedFields);
+                return new AdvancedFieldDefinitionsDto(query.Target, groups, ungroupedFields);
+            });
         }
 
         public BasicFieldDefinitionsDto GetBasicFieldDefinitions(GetBasicFieldDefinitionsQuery query)
         {
             ArgumentNullException.ThrowIfNull(query);
 
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             var fields = sfera.PodajObiektTypu<IProstePolaWlasne>();
             var entityType = GetEntityType(query.Target);
 
@@ -83,14 +86,16 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 .ToList()
                 : [];
 
-            return new BasicFieldDefinitionsDto(query.Target, definitions);
+                return new BasicFieldDefinitionsDto(query.Target, definitions);
+            });
         }
 
         public FlagDefinitionsDto GetFlagDefinitions(GetFlagDefinitionQuery query)
         {
             ArgumentNullException.ThrowIfNull(query);
 
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             var flags = sfera.FlagiWlasne()
                 .Dane
                 .Wszystkie()
@@ -116,7 +121,8 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                         .ToList()))
                 .ToList();
 
-            return new FlagDefinitionsDto(domains);
+                return new FlagDefinitionsDto(domains);
+            });
         }
  
         #region Target mapping

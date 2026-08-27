@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using SubiektNexoConnector.Infrastructure.Abstractions;
 
 namespace SubiektNexoConnector.Api.ErrorHandling;
 
@@ -32,6 +33,11 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
 
         var problemDetails = CreateProblemDetails(httpContext, exception);
 
+        if (exception is SferaQueueTimeoutException queueTimeout)
+        {
+            httpContext.Response.Headers.RetryAfter = queueTimeout.RetryAfterSeconds.ToString();
+        }
+
         httpContext.Response.StatusCode = problemDetails.Status!.Value;
 
         var wasWritten = await _problemDetailsService.TryWriteAsync(new ProblemDetailsContext
@@ -51,6 +57,17 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
 
     private ProblemDetails CreateProblemDetails(HttpContext httpContext, Exception exception)
     {
+        if (exception is SferaQueueTimeoutException)
+        {
+            return new ProblemDetails
+            {
+                Status = StatusCodes.Status503ServiceUnavailable,
+                Title = "Sfera is busy",
+                Detail = "The request waited too long for access to Sfera. Retry later.",
+                Instance = httpContext.Request.Path
+            };
+        }
+
         if (exception is InvalidOperationException)
         {
             return new ProblemDetails

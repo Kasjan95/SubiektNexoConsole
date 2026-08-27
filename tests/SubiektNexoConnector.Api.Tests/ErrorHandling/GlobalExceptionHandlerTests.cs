@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using SubiektNexoConnector.Api.ErrorHandling;
+using SubiektNexoConnector.Infrastructure.Abstractions;
 
 namespace SubiektNexoConnector.Api.Tests.ErrorHandling;
 
@@ -73,6 +74,38 @@ public class GlobalExceptionHandlerTests
         Assert.Equal("Internal Server Error", capturedContext.ProblemDetails.Title);
         Assert.Equal("The server encountered an unexpected error.", capturedContext.ProblemDetails.Detail);
         Assert.Equal("/products/ABC-123", capturedContext.ProblemDetails.Instance);
+    }
+
+    [Fact]
+    public async Task TryHandleAsync_ReturnsServiceUnavailableAndRetryAfter_ForSferaQueueTimeout()
+    {
+        var environment = Substitute.For<IHostEnvironment>();
+        environment.EnvironmentName.Returns(Environments.Production);
+
+        var logger = Substitute.For<ILogger<GlobalExceptionHandler>>();
+        var problemDetailsService = Substitute.For<IProblemDetailsService>();
+        ProblemDetailsContext? capturedContext = null;
+
+        problemDetailsService
+            .TryWriteAsync(Arg.Do<ProblemDetailsContext>(context => capturedContext = context))
+            .Returns(new ValueTask<bool>(true));
+
+        var handler = new GlobalExceptionHandler(environment, logger, problemDetailsService);
+        var httpContext = new DefaultHttpContext();
+        httpContext.Request.Method = HttpMethods.Get;
+        httpContext.Request.Path = "/warehouses";
+
+        var handled = await handler.TryHandleAsync(
+            httpContext,
+            new SferaQueueTimeoutException(TimeSpan.FromSeconds(30), retryAfterSeconds: 5),
+            CancellationToken.None);
+
+        Assert.True(handled);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, httpContext.Response.StatusCode);
+        Assert.Equal("5", httpContext.Response.Headers.RetryAfter);
+        Assert.NotNull(capturedContext);
+        Assert.Equal(StatusCodes.Status503ServiceUnavailable, capturedContext!.ProblemDetails.Status);
+        Assert.Equal("Sfera is busy", capturedContext.ProblemDetails.Title);
     }
 
     [Fact]

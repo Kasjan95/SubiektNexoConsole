@@ -6,22 +6,20 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
 {
     public class NexoWarehouseRepository : IWarehouseRepository
     {
-        private readonly ISessionFactory _sessionFactory;
+        private readonly ISferaExecutor _sferaExecutor;
 
-        public NexoWarehouseRepository(ISessionFactory sessionFactory)
+        public NexoWarehouseRepository(ISferaExecutor sferaExecutor)
         {
-            _sessionFactory = sessionFactory;
+            _sferaExecutor = sferaExecutor;
         }
         public IReadOnlyCollection<WarehouseDto> GetAll()
         {
-            using var sfera = _sessionFactory.Create();
-
-            return sfera.Magazyny()
+            return _sferaExecutor.Execute(sfera => sfera.Magazyny()
                 .Dane
                 .WszystkieDostepne()
                 .ToList()
                 .Select(w => new WarehouseDto(w.Symbol, w.Nazwa))
-                .ToArray();
+                .ToArray());
         }
 
     }

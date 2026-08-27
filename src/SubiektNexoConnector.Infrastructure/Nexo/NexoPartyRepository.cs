@@ -26,18 +26,19 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
     public class NexoPartyRepository : IPartyRepository
     {
         private const int MaxPageSize = 1000;
-        private readonly ISessionFactory _sessionFactory;
+        private readonly ISferaExecutor _sferaExecutor;
 
-        public NexoPartyRepository(ISessionFactory sessionFactory)
+        public NexoPartyRepository(ISferaExecutor sferaExecutor)
         {
-            _sessionFactory = sessionFactory;
+            _sferaExecutor = sferaExecutor;
         }
         #region GET
         public IReadOnlyCollection<PartyBasicDto> GetAllParties(GetPartiesQuery query)
         {
             ArgumentNullException.ThrowIfNull(query);
 
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
 
             var parties = query.CustomerStatus switch
             {
@@ -71,11 +72,13 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToList();
+            });
         }
 
         public PartyCreateOptionsDto GetCreateOptions()
         {
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
 
             var partyTypes = Enum.GetValues<PodtypPodmiotu>()
                 .Select(subtype => new PartyTypeOptionDto(
@@ -119,12 +122,14 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                     .OrderBy(feature => feature.Nazwa)
                     .Select(feature => new ReferenceDataOptionDto(feature.Id, feature.Nazwa))
                     .ToList());
+            });
         }
 
         public PartyDetailsDto? GetDetailsParty(GetPartyDetailsQuery query)
         {
             ArgumentNullException.ThrowIfNull(query);
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             Podmiot? party = sfera.Podmioty().Dane.Wszystkie(a => a.Sygnatura.PelnaSygnatura == query.PartySignature).FirstOrDefault();
             if (party == null)
                 return null;
@@ -184,6 +189,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 addresses,
                 contacts,
                 tradeCreditLimit);
+            });
         }
         #endregion
         #region PATCH
@@ -191,7 +197,8 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
         {
             ArgumentNullException.ThrowIfNull(command);
 
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
 
             if (partyBo is null)
@@ -297,11 +304,13 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 UpdatePartyFlag(sfera, partyBo.Dane.Id, command.Flag.Value);
 
             return updatedSignature;
+            });
         }
         public PartyAddressDto? PatchPartyAddress(PatchPartyAddressCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
             if (partyBo is null)
                 return null;
@@ -350,11 +359,13 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             {
                 partyBo.Odblokuj();
             }
+            });
         }
         public PartyContactDto? PatchPartyContact(PatchPartyContactCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
             if (partyBo is null)
                 return null;
@@ -386,6 +397,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             {
                 partyBo.Odblokuj();
             }
+            });
         }
         private static bool IsFlagOnlyPatch(PatchPartyCommand command) =>
             command.Flag.HasValue
@@ -463,7 +475,8 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
         public PartyDetailsDto CreateParty(CreatePartyCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
-            using Uchwyt sfera = _sessionFactory.Create();
+            var partySignature = _sferaExecutor.Execute(sfera =>
+            {
             using var partyBo = command.Type switch
             {
                 1 => sfera.Podmioty().UtworzOsobe(),
@@ -523,12 +536,16 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                     partyBo.PobierzKomunikatyBledow()));
             }
             partyBo.Odblokuj();
-            return GetDetailsParty(new GetPartyDetailsQuery(party.Sygnatura.PelnaSygnatura))!;
+            return party.Sygnatura.PelnaSygnatura;
+            });
+
+            return GetDetailsParty(new GetPartyDetailsQuery(partySignature))!;
         }
         public CreatePartyAddressResult? CreatePartyAddress(CreatePartyAddressCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
             if (partyBo is null)
                 return null;
@@ -554,11 +571,13 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             {
                 partyBo.Odblokuj();
             }
+            });
         }
         public PartyContactDto? CreatePartyContact(CreatePartyContactCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
             if (partyBo is null)
                 return null;
@@ -582,6 +601,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             {
                 partyBo.Odblokuj();
             }
+            });
         }
 
         private static void SetPartyGroup(Uchwyt sfera, Podmiot party, int? partyGroupId)
@@ -677,7 +697,8 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
         public DeletePartyResourceResult DeletePartyAddress(DeletePartyAddressCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
             if (partyBo is null)
                 return DeletePartyResourceResult.NotFound;
@@ -706,11 +727,13 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             {
                 partyBo.Odblokuj();
             }
+            });
         }
         public DeletePartyResourceResult DeletePartyContact(DeletePartyContactCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
-            using Uchwyt sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
             if (partyBo is null)
                 return DeletePartyResourceResult.NotFound;
@@ -739,6 +762,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             {
                 partyBo.Odblokuj();
             }
+            });
         }
         #endregion
     }

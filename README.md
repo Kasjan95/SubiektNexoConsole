@@ -160,6 +160,19 @@ For local development only, authentication can be disabled with:
 
 The template also configures Serilog console logging and an optional Seq sink at `http://localhost:5341`.
 
+### Sfera concurrency
+
+The connector serializes SDK access inside one API process. The optional `Nexo:SferaExecution` configuration controls how long a request can wait in that queue and the suggested retry interval:
+
+```json
+"SferaExecution": {
+  "QueueTimeoutSeconds": 30,
+  "RetryAfterSeconds": 5
+}
+```
+
+A timed-out request receives `503 Service Unavailable` with `Retry-After`. Structured logs include the queue wait, Sfera execution time, queue depth, operation name and result.
+
 ## Running Locally
 
 To use connection settings from `appsettings.json`, pass the `--config` flag:

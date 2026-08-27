@@ -17,14 +17,14 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
 {
     public class NexoProductRepository : IProductRepository
     {
-        private readonly ISessionFactory _sessionFactory;
-        public NexoProductRepository(ISessionFactory sessionFactory)
+        private readonly ISferaExecutor _sferaExecutor;
+        public NexoProductRepository(ISferaExecutor sferaExecutor)
         {
-            _sessionFactory = sessionFactory;
+            _sferaExecutor = sferaExecutor;
         }
         public ProductDetailsDto? GetDetails(string productSymbol)
         {
-            using var sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
             {
                 IProstePolaWlasne prostePolaWlasne = sfera.PodajObiektTypu<IProstePolaWlasne>();
                 var product = sfera.Asortymenty().Dane.WyszukajPoSymbolu(productSymbol);
@@ -83,11 +83,12 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                         s.IloscZadysponowana
                     )).ToList()
                 );
-            }
+            });
         }
         public ProductFromWarehouseDto? GetDetailsFromWarehouse(string warehouseSymbol, string productSymbol)
         {
-            using var sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             var product = sfera
                 .Asortymenty()
                 .Dane
@@ -118,12 +119,14 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 MapStockMovement(product.Wydania, warehouse.Id),
                 MapStockMovement(product.Zwroty, warehouse.Id)
             );
+            });
         }
         public IReadOnlyCollection<ProductBasicDto> GetAll(GetProductsQuery query)
         {
             ArgumentNullException.ThrowIfNull(query);
 
-            using var sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
 
             var page = Math.Max(query.Page, 1);
             var pageSize = Math.Clamp(query.PageSize, 1, 1000);
@@ -153,10 +156,12 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
                 .ToList();
+            });
         }
         public string Create(CreateProductCommand command)
         {
-            using var sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             using var product = sfera.Asortymenty().Utworz();
 
             product.WypelnijNaPodstawieSzablonu(sfera.SzablonyAsortymentu().DaneDomyslne.Towar);
@@ -181,10 +186,12 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             }
 
             return product.Dane.Symbol;
+            });
         }
         public string? Patch(PatchProductCommand command)
         {
-            using var sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             var product = sfera.Asortymenty().Dane.WyszukajPoSymbolu(command.ProductSku);
             if (product is null)
                 return null;
@@ -264,6 +271,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 UpdateProductFlag(sfera, product.Id, command.Flag.Value);
 
             return updatedSku;
+            });
         }
 
         private static void UpdateProductFlag(
@@ -295,7 +303,8 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
 
         public DeleteProductResult Delete(DeleteProductCommand command)
         {
-            using var sfera = _sessionFactory.Create();
+            return _sferaExecutor.Execute(sfera =>
+            {
             var product = sfera.Asortymenty().Dane.WyszukajPoSymbolu(command.SKU);
             if (product == null)
             {
@@ -319,6 +328,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             }
 
             return DeleteProductResult.Deleted;
+            });
         }
 
         private static void UpdateProductEan(IAsortyment productBo, string? ean)

@@ -30,6 +30,7 @@ public static class DependencyInjection
     {
         var appConfig = AppConfigBinder.Bind(configuration);
         services.AddSingleton(appConfig);
+        services.AddSingleton(appConfig.SferaExecution);
         services.AddSingleton<DanePolaczenia>(_ =>
         {
             if (useConfig)
@@ -47,6 +48,7 @@ public static class DependencyInjection
         });
 
         services.AddSingleton<ISessionFactory>(sp => new NexoSessionFactory(sp.GetRequiredService<AppConfig>(), sp.GetRequiredService<DanePolaczenia>()));
+        services.AddSingleton<ISferaExecutor, SferaExecutor>();
 
         services.AddTransient<IProductRepository, NexoProductRepository>();
         services.AddTransient<IWarehouseRepository, NexoWarehouseRepository>();

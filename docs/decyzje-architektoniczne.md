@@ -90,15 +90,13 @@ Błędy walidacji Sfery są tłumaczone na czytelne komunikaty i odpowiedzi `Pro
 
 ### Stan obecny
 
-Operacje repozytoriów tworzą uchwyt Sfery na czas pojedynczego przypadku użycia i wykonują synchroniczne API dostawcy. ASP.NET Core może obsługiwać wiele żądań równolegle, ale bezpieczny poziom współbieżności SDK nie został jeszcze potwierdzony pomiarami ani jednoznacznym wymaganiem technicznym.
+Operacje repozytoriów wykonują synchroniczne API dostawcy przez współdzielony `ISferaExecutor`. Executor jest singletonem procesu i dopuszcza tylko jedną aktywną operację Sfery naraz. Jego zakres obejmuje utworzenie uchwytu, logowanie, pracę z SDK oraz `Dispose()` uchwytu.
 
-Nie należy zakładać, że większa liczba równoległych sesji automatycznie zwiększy przepustowość. Może ona zwiększyć obciążenie nexo, powodować konflikty blokad lub ujawnić ograniczenia wątkowe bibliotek dostawcy.
+Decyzję potwierdził test równoległych odczytów: równoległe wywołania `MenedzerPolaczen.Polacz()` kończyły się niedeterministycznymi błędami wewnątrz Sfery. Sam fakt, że część żądań czasem kończyła się powodzeniem, nie jest gwarancją bezpiecznej współbieżności SDK.
 
 ### Pierwszy etap: konfigurowalna bramka dostępu
 
-Pierwszym mechanizmem ochronnym, jeśli potwierdzi się taka potrzeba, będzie współdzielona bramka oparta na `SemaphoreSlim`. Początkowy limit może wynosić `1`, ale powinien być konfigurowalny.
-
-Brama powinna obejmować wyłącznie pracę z SDK, a nie uwierzytelnianie, walidację żądania ani serializację odpowiedzi. Jej wprowadzeniu muszą towarzyszyć pomiary:
+Współdzielona bramka jest oparta na `SemaphoreSlim` z limitem `1`. Obejmuje wyłącznie pracę z SDK, a nie uwierzytelnianie, walidację żądania ani serializację odpowiedzi. Następne kroki obserwowalności to pomiary:
 
 - czasu oczekiwania na wejście,
 - czasu wykonywania operacji Sfery,
@@ -106,7 +104,9 @@ Brama powinna obejmować wyłącznie pracę z SDK, a nie uwierzytelnianie, walid
 - timeoutów i błędów blokad,
 - percentyli czasu odpowiedzi, szczególnie p95 i p99.
 
-`SemaphoreSlim` ogranicza równoległość w pojedynczym procesie, ale nie koordynuje wielu instancji API i nie gwarantuje wykonania kolejnych operacji na tym samym wątku.
+Oczekiwanie na bramkę jest ograniczone konfiguracją `Nexo:SferaExecution:QueueTimeoutSeconds` (domyślnie 30 sekund). Po jej przekroczeniu API odpowiada `503 Service Unavailable` oraz nagłówkiem `Retry-After`, którego wartość kontroluje `Nexo:SferaExecution:RetryAfterSeconds` (domyślnie 5 sekund). Każda zakończona operacja zapisuje w logu ustrukturyzowane pola czasu oczekiwania, czasu wykonania, głębokości kolejki i wyniku.
+
+`SemaphoreSlim` ogranicza równoległość w pojedynczym procesie, ale nie koordynuje wielu instancji API i nie gwarantuje wykonania kolejnych operacji na tym samym wątku. Jeżeli przyszłe testy wykażą zależność Sfery od stałego wątku, następnym etapem będzie pojedynczy worker.
 
 ### Drugi etap: kolejka i dedykowany worker
 
@@ -216,8 +216,7 @@ SDK nakłada koszt wydajnościowy i ograniczenia wykonania, ale zachowuje reguł
 ## Kolejność dalszego rozwoju
 
 1. Dodać pomiary czasu operacji Sfery, oczekiwania oraz błędów blokad.
-2. Na podstawie pomiarów ustalić limit współbieżności i ewentualnie wprowadzić `SemaphoreSlim`.
-3. Wprowadzić jawne limity wejściowe, timeouty i identyfikatory korelacyjne.
+2. Wprowadzić jawne limity wejściowe, timeouty i identyfikatory korelacyjne.
 4. Dodać idempotencję dla operacji zapisu.
 5. Wprowadzić cache z metadanymi `live`/`cached` oraz poprawną invalidacją po zapisie.
 6. Dodać prosty worker interwałowy dla kosztownych odczytów w systemach o małym ruchu.

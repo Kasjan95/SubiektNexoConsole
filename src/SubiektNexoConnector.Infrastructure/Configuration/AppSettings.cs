@@ -6,6 +6,7 @@ namespace SubiektNexoConnector.Infrastructure.Configuration
     {
         public DatabaseOptions Database { get; set; } = new();
         public SystemLoginOptions SystemLogin { get; set; } = new();
+        public SferaExecutionOptions SferaExecution { get; set; } = new();
 
         public void Validate()
         {
@@ -29,6 +30,12 @@ namespace SubiektNexoConnector.Infrastructure.Configuration
 
             if (string.IsNullOrWhiteSpace(SystemLogin.NexoPassword))
                 throw new ConfigurationException("Missing NexoPassword.");
+
+            if (SferaExecution.QueueTimeoutSeconds <= 0)
+                throw new ConfigurationException("SferaExecution.QueueTimeoutSeconds must be greater than zero.");
+
+            if (SferaExecution.RetryAfterSeconds <= 0)
+                throw new ConfigurationException("SferaExecution.RetryAfterSeconds must be greater than zero.");
         }
     }
     public class DatabaseOptions
@@ -43,6 +50,11 @@ namespace SubiektNexoConnector.Infrastructure.Configuration
     {
         public string NexoUser { get; set; } = "";
         public string NexoPassword { get; set; } = "";
+    }
+    public class SferaExecutionOptions
+    {
+        public int QueueTimeoutSeconds { get; set; } = 60;
+        public int RetryAfterSeconds { get; set; } = 5;
     }
     public class ConfigurationException : Exception
     {
