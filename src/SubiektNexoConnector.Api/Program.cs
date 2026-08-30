@@ -1,5 +1,6 @@
 using SubiektNexoConnector.Api.Auth;
 using SubiektNexoConnector.Api.ErrorHandling;
+using SubiektNexoConnector.Api.Observability;
 using SubiektNexoConnector.Api.Swagger;
 using SubiektNexoConnector.Infrastructure;
 using Serilog;
@@ -13,11 +14,19 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     var builder = WebApplication.CreateBuilder(args);
+    var observability = builder.Configuration
+        .GetSection(ObservabilityOptions.SectionName)
+        .Get<ObservabilityOptions>() ?? new ObservabilityOptions();
 
     builder.Host.UseSerilog((context, services, loggerConfiguration) => loggerConfiguration
         .ReadFrom.Configuration(context.Configuration)
         .ReadFrom.Services(services)
-        .Enrich.FromLogContext());
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Service", observability.Service)
+        .Enrich.WithProperty("Environment", context.HostingEnvironment.EnvironmentName)
+        .Enrich.WithProperty("AdapterInstance", observability.AdapterInstance)
+        .Enrich.WithProperty("NexoCompany", observability.NexoCompany)
+        .Enrich.WithProperty("MachineName", Environment.MachineName));
 
     var apiAuthenticationOptions = builder.Services.AddApiAuthentication(
         builder.Configuration,
@@ -29,6 +38,9 @@ try
         options.CustomizeProblemDetails = context =>
         {
             context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
+
+            if (context.HttpContext.Items.TryGetValue(CorrelationIdMiddleware.HttpContextItemKey, out var correlationId))
+                context.ProblemDetails.Extensions["correlationId"] = correlationId;
         };
     });
 
@@ -51,6 +63,7 @@ try
 
     var app = builder.Build();
 
+    app.UseMiddleware<CorrelationIdMiddleware>();
     app.UseSerilogRequestLogging();
     app.UseExceptionHandler();
     app.UseStatusCodePages(async statusCodeContext =>

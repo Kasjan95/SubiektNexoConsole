@@ -1,6 +1,10 @@
-# Test równoległych odczytów Sfery
+# Scenariusz obciążeniowy Sfery
 
-Narzędzie wysyła w tej samej chwili wyłącznie żądania HTTP `GET`, aby sprawdzić zachowanie API i Sfery przy równoległości `2`, `4` i `8`. Nie wykonuje zapisów w nexo.
+Narzędzie wykonuje wyłącznie odczyty. Każdy wirtualny klient pobiera najpierw listę produktów, a następnie równolegle pobiera detale kilku wybranych SKU. Dzięki temu test obejmuje zarówno listowanie, jak i cięższe detale produktów.
+
+Każdy poziom równoległości jest uruchamiany dwukrotnie: bez `X-Correlation-Id` i z nim. W drugim wariancie wszystkie wywołania jednego wirtualnego klienta mają ten sam UUID. W pierwszym wariancie probe weryfikuje, że adapter sam zwraca poprawny UUID w każdej odpowiedzi.
+
+Domyślne poziomy równoległości to `4`, `8`, `16`; każdy klient wykonuje listę oraz `5` pobrań detali. Przy wyższych poziomach celowo powinny pojawić się odpowiedzi `503`, jeżeli czas oczekiwania w kolejce przekroczy `Nexo:SferaExecution:QueueTimeoutSeconds`.
 
 Najpierw uruchom API ze wskazaniem konfiguracji połączenia:
 
@@ -8,29 +12,31 @@ Najpierw uruchom API ze wskazaniem konfiguracji połączenia:
 dotnet run --project src\SubiektNexoConnector.Api\SubiektNexoConnector.Api.csproj -- --config
 ```
 
-W drugim oknie PowerShell uruchom próbę na lekkim endpointzie odczytowym:
+W drugim oknie PowerShell uruchom próbę:
 
 ```powershell
 dotnet run --project tools\SferaConcurrencyProbe
 ```
 
-Domyślny adres to `https://localhost:7214/warehouses`, a poziomy równoległości to `2,4,8`. Jeżeli API wymaga klucza, ustaw go tylko w bieżącej sesji:
+Domyślny adres API to `https://localhost:7214/`. Jeżeli API wymaga klucza, ustaw go tylko w bieżącej sesji:
 
 ```powershell
 $env:SUBIEKT_NEXO_CONNECTOR_API_KEY = "..."
 dotnet run --project tools\SferaConcurrencyProbe
 ```
 
-Przykład z dziesięcioma powtórzeniami każdego poziomu:
+Przykład z trzema powtórzeniami i trzema detalami na klienta:
 
 ```powershell
-dotnet run --project tools\SferaConcurrencyProbe -- --repetitions 10
+dotnet run --project tools\SferaConcurrencyProbe -- --repetitions 3 --details-per-run 3
 ```
 
-Endpoint można zmienić wyłącznie na inny endpoint `GET`:
+Parametry:
 
-```powershell
-dotnet run --project tools\SferaConcurrencyProbe -- --uri "https://localhost:7214/products?page=1&pageSize=10" --repetitions 10
-```
+- `--base-uri URL` — adres bazowy API; `--uri` pozostaje aliasem.
+- `--concurrency 4,8,16` — poziomy równoległości.
+- `--details-per-run 5` — liczba równoległych detali po liście produktów.
+- `--products-page-size 50` — liczba produktów pobieranych do wyboru detali.
+- `--timeout-seconds 60` — timeout jednego wywołania HTTP probe.
 
-Wynik podaje liczbę odpowiedzi `2xx`, czasy pojedynczych żądań oraz czas całej serii. Kod zakończenia `1` oznacza, że co najmniej jedno żądanie nie zakończyło się odpowiedzią `2xx`.
+Wynik rozróżnia powodzenie całych workflow oraz pojedynczych wywołań HTTP. Kod zakończenia `1` oznacza, że co najmniej jeden workflow nie zakończył się powodzeniem.

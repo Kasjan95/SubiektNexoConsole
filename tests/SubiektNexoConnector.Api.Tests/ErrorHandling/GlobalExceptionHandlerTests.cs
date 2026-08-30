@@ -105,7 +105,13 @@ public class GlobalExceptionHandlerTests
         Assert.Equal("5", httpContext.Response.Headers.RetryAfter);
         Assert.NotNull(capturedContext);
         Assert.Equal(StatusCodes.Status503ServiceUnavailable, capturedContext!.ProblemDetails.Status);
-        Assert.Equal("Sfera is busy", capturedContext.ProblemDetails.Title);
+        Assert.Equal("Sfera is temporarily busy", capturedContext.ProblemDetails.Title);
+        Assert.Equal(
+            "The request was not executed because it waited too long for access to Sfera. Retry later.",
+            capturedContext.ProblemDetails.Detail);
+        Assert.Equal("urn:subiekt-nexo-connector:error:sfera-queue-timeout", capturedContext.ProblemDetails.Type);
+        Assert.Equal("sfera_queue_timeout", capturedContext.ProblemDetails.Extensions["code"]);
+        Assert.Equal(5, capturedContext.ProblemDetails.Extensions["retryAfterSeconds"]);
     }
 
     [Fact]

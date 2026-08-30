@@ -160,6 +160,10 @@ For local development only, authentication can be disabled with:
 
 The template also configures Serilog console logging and an optional Seq sink at `http://localhost:5341`.
 
+Set `Observability:AdapterInstance` and `Observability:NexoCompany` uniquely for every deployed adapter. Every Seq event is enriched with `Service`, `Environment`, `AdapterInstance`, `NexoCompany`, and `MachineName`.
+
+Every response includes `X-Correlation-Id`. A client may provide a UUID in that request header to preserve one identifier across its backend and this adapter; otherwise the adapter generates one. The identifier is also added to request logs, Sfera logs, and Problem Details responses.
+
 ### Sfera concurrency
 
 The connector serializes SDK access inside one API process. The optional `Nexo:SferaExecution` configuration controls how long a request can wait in that queue and the suggested retry interval:
