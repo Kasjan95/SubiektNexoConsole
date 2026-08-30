@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using SubiektNexoConnector.Api.Configuration;
 using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
@@ -59,21 +60,27 @@ public class PartiesController : ControllerBase
 
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyCollection<PartyBasicDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public ActionResult<IReadOnlyCollection<PartyBasicDto>> GetAll(
         [FromServices] GetPartiesHandler handler,
         [FromQuery] PartyCustomerStatusFilter customerStatus = PartyCustomerStatusFilter.Standard,
         [FromQuery] short? type = null,
         [FromQuery] string? search = null,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 100)
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null,
+        [FromServices] PaginationOptions? paginationOptions = null)
     {
+        var pagination = paginationOptions ?? new PaginationOptions();
+        if (!pagination.TryResolve(page, pageSize, out var parameters, out var errors))
+            return ValidationProblem(new ValidationProblemDetails(errors));
+
         var result = handler.Handle(new GetPartiesQuery
         {
             CustomerStatus = customerStatus,
             Type = type,
             Search = search,
-            Page = page,
-            PageSize = pageSize
+            Page = parameters.Page,
+            PageSize = parameters.PageSize
         });
         return Ok(result);
     }

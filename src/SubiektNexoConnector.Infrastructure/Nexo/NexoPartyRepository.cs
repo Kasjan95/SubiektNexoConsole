@@ -25,7 +25,6 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
 {
     public class NexoPartyRepository : IPartyRepository
     {
-        private const int MaxPageSize = 1000;
         private readonly ISferaExecutor _sferaExecutor;
 
         public NexoPartyRepository(ISferaExecutor sferaExecutor)
@@ -53,23 +52,29 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 parties = parties.Where(a => a.Typ == query.Type.Value);
             }
 
-            var page = Math.Max(query.Page, 1);
-            var pageSize = Math.Clamp(query.PageSize, 1, MaxPageSize);
+            var page = query.Page;
+            var pageSize = query.PageSize;
 
-            var mappedParties = parties
-                .OrderBy(a => a.Id)
-                .ToList()
-                .Select(NexoPartyMapper.MapBasic);
+            var orderedParties = parties.OrderBy(a => a.Id);
 
-            if (!string.IsNullOrWhiteSpace(query.Search))
+            if (string.IsNullOrWhiteSpace(query.Search))
             {
-                var searchTerm = query.Search.Trim();
-                mappedParties = mappedParties.Where(a =>
-                    SearchTextMatcher.MatchesSearch(a, searchTerm));
+                return orderedParties
+                    .Skip(checked((page - 1) * pageSize))
+                    .Take(pageSize)
+                    .ToList()
+                    .Select(NexoPartyMapper.MapBasic)
+                    .ToList();
             }
 
+            var searchTerm = query.Search.Trim();
+            var mappedParties = orderedParties
+                .ToList()
+                .Select(NexoPartyMapper.MapBasic)
+                .Where(a => SearchTextMatcher.MatchesSearch(a, searchTerm));
+
             return mappedParties
-                .Skip((page - 1) * pageSize)
+                .Skip(checked((page - 1) * pageSize))
                 .Take(pageSize)
                 .ToList();
             });

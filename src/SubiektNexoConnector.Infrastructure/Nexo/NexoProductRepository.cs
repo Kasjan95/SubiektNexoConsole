@@ -128,36 +128,44 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             return _sferaExecutor.Execute(sfera =>
             {
 
-            var page = Math.Max(query.Page, 1);
-            var pageSize = Math.Clamp(query.PageSize, 1, 1000);
+            var page = query.Page;
+            var pageSize = query.PageSize;
 
             var products = sfera
                 .Asortymenty()
                 .Dane
                 .Wszystkie()
-                .OrderBy(a => a.Id)
-                .ToList()
-                .Select(
-                a => new ProductBasicDto(
-                        a.Id,
-                        a.Symbol,
-                        a.Nazwa,
-                        a.JednostkaMagazynowa?.PodstawowyKodKreskowy?.Kod ?? string.Empty
-                 ));
+                .OrderBy(a => a.Id);
 
-            if (!string.IsNullOrWhiteSpace(query.Search))
+            if (string.IsNullOrWhiteSpace(query.Search))
             {
-                var searchTerm = query.Search.Trim();
-                products = products.Where(a =>
-                    SearchTextMatcher.MatchesSearch(a, searchTerm));
+                return products
+                    .Skip(checked((page - 1) * pageSize))
+                    .Take(pageSize)
+                    .ToList()
+                    .Select(MapBasicProduct)
+                    .ToList();
             }
 
-            return products
-                .Skip((page - 1) * pageSize)
+            var searchTerm = query.Search.Trim();
+            var mappedProducts = products
+                .ToList()
+                .Select(MapBasicProduct)
+                .Where(a => SearchTextMatcher.MatchesSearch(a, searchTerm));
+
+            return mappedProducts
+                .Skip(checked((page - 1) * pageSize))
                 .Take(pageSize)
                 .ToList();
             });
         }
+
+        private static ProductBasicDto MapBasicProduct(InsERT.Moria.ModelDanych.Asortyment product) => new(
+            product.Id,
+            product.Symbol,
+            product.Nazwa,
+            product.JednostkaMagazynowa?.PodstawowyKodKreskowy?.Kod ?? string.Empty);
+
         public string Create(CreateProductCommand command)
         {
             return _sferaExecutor.Execute(sfera =>

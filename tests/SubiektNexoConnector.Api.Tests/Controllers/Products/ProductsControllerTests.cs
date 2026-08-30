@@ -49,6 +49,21 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
         }
 
         [Fact]
+        public void GetAll_ReturnsValidationProblem_WhenPageIsOutsideContract()
+        {
+            var repository = Substitute.For<IProductRepository>();
+            var handler = new GetProductsHandler(repository);
+            var controller = new ProductsController();
+
+            var actionResult = controller.GetAll(handler, page: 0);
+
+            var badRequest = Assert.IsType<BadRequestObjectResult>(actionResult.Result);
+            var problem = Assert.IsType<ValidationProblemDetails>(badRequest.Value);
+            Assert.Contains("page", problem.Errors.Keys);
+            repository.DidNotReceive().GetAll(Arg.Any<GetProductsQuery>());
+        }
+
+        [Fact]
         public void GetDetails_ReturnsOkWithProduct_WhenProductExists()
         {
             var repository = Substitute.For<IProductRepository>();

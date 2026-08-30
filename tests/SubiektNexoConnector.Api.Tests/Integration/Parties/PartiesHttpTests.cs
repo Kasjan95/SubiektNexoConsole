@@ -13,6 +13,7 @@ using SubiektNexoConnector.Core.Application.Parties.Addresses.DeleteAddress;
 using SubiektNexoConnector.Core.Application.Parties.Contacts.CreateContact;
 using SubiektNexoConnector.Core.Application.Parties.Contacts.DeleteContact;
 using SubiektNexoConnector.Core.Application.Parties.Contacts.PatchContact;
+using SubiektNexoConnector.Core.Application.Parties.GetParties;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
 using SubiektNexoConnector.Core.Application.Parties.PatchParty;
 using SubiektNexoConnector.Core.Application.Parties.Shared;
@@ -29,6 +30,19 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     {
         _factory = factory;
         _client = factory.CreateBusinessClient();
+    }
+
+    [Fact]
+    public async Task GetParties_Returns400ValidationProblem_WhenPageIsInvalid()
+    {
+        _factory.Parties.ClearReceivedCalls();
+
+        var response = await _client.GetAsync("/parties?page=0");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        body!.Errors.Should().ContainKey("page");
+        _factory.Parties.DidNotReceive().GetAllParties(Arg.Any<GetPartiesQuery>());
     }
 
     [Fact]

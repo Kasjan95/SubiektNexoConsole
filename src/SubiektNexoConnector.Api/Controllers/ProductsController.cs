@@ -1,5 +1,6 @@
 using System.Net.Mime;
 using Microsoft.AspNetCore.Mvc;
+using SubiektNexoConnector.Api.Configuration;
 using SubiektNexoConnector.Core.Application.Products;
 
 namespace SubiektNexoConnector.Api.Controllers;
@@ -33,17 +34,23 @@ public class ProductsController : ControllerBase
 
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyCollection<ProductBasicDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     public ActionResult<IReadOnlyCollection<ProductBasicDto>> GetAll(
         [FromServices] GetProductsHandler handler,
         [FromQuery] string? search = null,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 100)
+        [FromQuery] int? page = null,
+        [FromQuery] int? pageSize = null,
+        [FromServices] PaginationOptions? paginationOptions = null)
     {
+        var pagination = paginationOptions ?? new PaginationOptions();
+        if (!pagination.TryResolve(page, pageSize, out var parameters, out var errors))
+            return ValidationProblem(new ValidationProblemDetails(errors));
+
         var result = handler.Handle(new GetProductsQuery
         {
             Search = search,
-            Page = page,
-            PageSize = pageSize
+            Page = parameters.Page,
+            PageSize = parameters.PageSize
         });
         return Ok(result);
     }

@@ -36,7 +36,7 @@ More detailed trade-offs are documented in Polish in [docs/decyzje-architektonic
 | `PATCH` | `/products/{sku}` | Partially update product data, custom fields or flag assignment. |
 | `DELETE` | `/products/{sku}` | Delete a product when nexo allows it. |
 
-The product list accepts `search`, `page` and `pageSize` query parameters.
+The product list accepts `search`, `page` and `pageSize` query parameters. Page numbering starts at `1`; invalid pagination values return `400`. The default and maximum page sizes are configured through `Api:Pagination`.
 
 ### Warehouses
 
@@ -55,7 +55,7 @@ The product list accepts `search`, `page` and `pageSize` query parameters.
 | `GET` | `/parties/{partySignature}` | Get party details, addresses, contacts, trade credit limits, flags and custom fields. |
 | `PATCH` | `/parties/{partySignature}` | Partially update party data, custom fields or flag assignment. |
 
-The party list accepts `customerStatus`, `type`, `search`, `page` and `pageSize` query parameters.
+The party list accepts `customerStatus`, `type`, `search`, `page` and `pageSize` query parameters. Page numbering starts at `1`; invalid pagination values return `400`. The default and maximum page sizes are configured through `Api:Pagination`.
 
 ### Party Addresses
 

@@ -41,6 +41,19 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
+    public async Task GetProducts_Returns400ValidationProblem_WhenPageSizeExceedsLimit()
+    {
+        _factory.Products.ClearReceivedCalls();
+
+        var response = await _client.GetAsync("/products?pageSize=1001");
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        var body = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
+        body!.Errors.Should().ContainKey("pageSize");
+        _factory.Products.DidNotReceive().GetAll(Arg.Any<GetProductsQuery>());
+    }
+
+    [Fact]
     public async Task GetProductDetails_Returns404_WhenWrongSku()
     {
         _factory.Products.GetDetails("non-existing").Returns((ProductDetailsDto?)null);

@@ -1,4 +1,5 @@
 using SubiektNexoConnector.Api.Auth;
+using SubiektNexoConnector.Api.Configuration;
 using SubiektNexoConnector.Api.ErrorHandling;
 using SubiektNexoConnector.Api.Observability;
 using SubiektNexoConnector.Api.Swagger;
@@ -17,6 +18,11 @@ try
     var observability = builder.Configuration
         .GetSection(ObservabilityOptions.SectionName)
         .Get<ObservabilityOptions>() ?? new ObservabilityOptions();
+    var pagination = builder.Configuration
+        .GetSection(PaginationOptions.SectionName)
+        .Get<PaginationOptions>() ?? new PaginationOptions();
+    pagination.Validate();
+    builder.Services.AddSingleton(pagination);
 
     builder.Host.UseSerilog((context, services, loggerConfiguration) => loggerConfiguration
         .ReadFrom.Configuration(context.Configuration)
