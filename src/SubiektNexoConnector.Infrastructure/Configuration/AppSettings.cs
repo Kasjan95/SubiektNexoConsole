@@ -8,21 +8,24 @@ namespace SubiektNexoConnector.Infrastructure.Configuration
         public SystemLoginOptions SystemLogin { get; set; } = new();
         public SferaExecutionOptions SferaExecution { get; set; } = new();
 
-        public void Validate()
+        public void Validate(bool requireDatabaseSettings = true)
         {
-            if (string.IsNullOrWhiteSpace(Database.SqlServer))
-                throw new ConfigurationException("Missing SqlServer.");
-
-            if (string.IsNullOrWhiteSpace(Database.DatabaseName))
-                throw new ConfigurationException("Missing DatabaseName.");
-
-            if (!Database.UseWindowsAuth)
+            if (requireDatabaseSettings)
             {
-                if (string.IsNullOrWhiteSpace(Database.SqlUser))
-                    throw new ConfigurationException("UseWindowsAuth=false, but SqlUser is missing.");
+                if (string.IsNullOrWhiteSpace(Database.SqlServer))
+                    throw new ConfigurationException("Missing SqlServer.");
 
-                if (string.IsNullOrWhiteSpace(Database.SqlPassword))
-                    throw new ConfigurationException("UseWindowsAuth=false, but SqlPassword is missing.");
+                if (string.IsNullOrWhiteSpace(Database.DatabaseName))
+                    throw new ConfigurationException("Missing DatabaseName.");
+
+                if (!Database.UseWindowsAuth)
+                {
+                    if (string.IsNullOrWhiteSpace(Database.SqlUser))
+                        throw new ConfigurationException("UseWindowsAuth=false, but SqlUser is missing.");
+
+                    if (string.IsNullOrWhiteSpace(Database.SqlPassword))
+                        throw new ConfigurationException("UseWindowsAuth=false, but SqlPassword is missing.");
+                }
             }
 
             if (string.IsNullOrWhiteSpace(SystemLogin.NexoUser))

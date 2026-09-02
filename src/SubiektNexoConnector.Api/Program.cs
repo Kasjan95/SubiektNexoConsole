@@ -14,10 +14,20 @@ Log.Logger = new LoggerConfiguration()
 
 try
 {
-    var builder = WebApplication.CreateBuilder(args);
+    var startupOptions = AdapterStartupOptions.Parse(args);
+    var builder = WebApplication.CreateBuilder(startupOptions.HostArguments.ToArray());
+    string? instanceSettingsPath = null;
+
+    if (startupOptions.Mode == AdapterStartupMode.InsLauncher)
+    {
+        instanceSettingsPath = startupOptions.AddInstanceConfiguration(builder.Configuration);
+        AdapterUrlValidator.Validate(builder.Configuration[AdapterUrlValidator.ConfigurationKey]);
+    }
+
     var observability = builder.Configuration
         .GetSection(ObservabilityOptions.SectionName)
         .Get<ObservabilityOptions>() ?? new ObservabilityOptions();
+    observability.AdapterInstance = startupOptions.ResolveAdapterInstance(observability.AdapterInstance);
     var pagination = builder.Configuration
         .GetSection(PaginationOptions.SectionName)
         .Get<PaginationOptions>() ?? new PaginationOptions();
@@ -65,9 +75,15 @@ try
 
     builder.Services.AddNexoInfrastructure(
         builder.Configuration,
-        NexoConnectionModeResolver.UseConfig(args));
+        startupOptions.UseLocalNexoConnection);
 
     var app = builder.Build();
+
+    Log.Information(
+        "Adapter starting in {StartupMode} mode for instance {AdapterInstance}. InstanceSettingsPath: {InstanceSettingsPath}",
+        startupOptions.Mode,
+        startupOptions.InstanceName,
+        instanceSettingsPath);
 
     app.UseMiddleware<CorrelationIdMiddleware>();
     app.UseSerilogRequestLogging();
@@ -98,6 +114,7 @@ try
 catch (Exception ex)
 {
     Log.Fatal(ex, "Application terminated unexpectedly.");
+    Environment.ExitCode = 1;
 }
 finally
 {

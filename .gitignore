@@ -367,3 +367,6 @@ FodyWeavers.xsd
 /src/SubiektNexoConnector.Api/appsettings.json
 /tmp/nexo-chm/html
 /.dotnet
+
+# Local deployment planning notes
+/docs/pilot-deployment-plan.local.md

@@ -28,7 +28,7 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddNexoInfrastructure(this IServiceCollection services, IConfiguration configuration, bool useConfig)
     {
-        var appConfig = AppConfigBinder.Bind(configuration);
+        var appConfig = AppConfigBinder.Bind(configuration, requireDatabaseSettings: useConfig);
         services.AddSingleton(appConfig);
         services.AddSingleton(appConfig.SferaExecution);
         services.AddSingleton<DanePolaczenia>(_ =>

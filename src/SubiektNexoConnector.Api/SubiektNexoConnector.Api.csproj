@@ -24,6 +24,11 @@
 	  <ProjectReference Include="..\SubiektNexoConnector.Core\SubiektNexoConnector.Core.csproj" />
 	  <ProjectReference Include="..\SubiektNexoConnector.Infrastructure\SubiektNexoConnector.Infrastructure.csproj" />
   </ItemGroup>
+
+	<ItemGroup>
+		<Content Update="appsettings.json" CopyToPublishDirectory="Never" />
+		<Content Update="appsettings.template.json" CopyToPublishDirectory="Never" />
+	</ItemGroup>
 	<ItemGroup>
 		<Reference Include="InsERT.Moria.API">
 			<HintPath>$(nexoSdkBinPath)InsERT.Moria.API.dll</HintPath>

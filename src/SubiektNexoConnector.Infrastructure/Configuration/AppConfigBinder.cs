@@ -4,14 +4,14 @@ namespace SubiektNexoConnector.Infrastructure.Configuration;
 
 public static class AppConfigBinder
 {
-    public static AppConfig Bind(IConfiguration configuration)
+    public static AppConfig Bind(IConfiguration configuration, bool requireDatabaseSettings)
     {
         var config = configuration.GetSection("Nexo").Get<AppConfig>();
 
         if (config is null)
             throw new InvalidOperationException("Brak sekcji konfiguracji 'Nexo'.");
 
-        config.Validate();
+        config.Validate(requireDatabaseSettings);
         return config;
     }
 }

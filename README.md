@@ -187,6 +187,34 @@ dotnet run --project src\SubiektNexoConnector.Api\SubiektNexoConnector.Api.cspro
 
 Without `--config`, the connector uses the standard connection flow supplied by the nexo SDK.
 
+The deployed API is started by InsLauncher with an explicit instance name:
+
+```text
+/UruchomionePrzezInsLauncher --instance nexoadapter-krakow-01
+```
+
+In this mode, the database connection is received through `DanePolaczenia.Odbierz()`, while
+instance settings are loaded from:
+
+```text
+C:\ProgramData\SubiektNexoConnector\instances\nexoadapter-krakow-01\settings.json
+```
+
+The instance name may contain ASCII letters, digits, `-` and `_`. Local `appsettings.json`
+and `appsettings.template.json` are excluded from publish output so that development
+credentials cannot be included in the deployment package.
+
+The instance configuration must explicitly define the HTTP endpoint and a non-default port:
+
+```json
+{
+  "Urls": "http://0.0.0.0:15001"
+}
+```
+
+Changing the port requires editing the instance `settings.json`, updating the Windows Firewall
+rule and restarting the adapter through InsLauncher. It does not require publishing the adapter again.
+
 In the Development environment, Swagger UI is available at one of the URLs configured by the selected launch profile, for example:
 
 ```text
