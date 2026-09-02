@@ -215,6 +215,9 @@ The instance configuration must explicitly define the HTTP endpoint and a non-de
 Changing the port requires editing the instance `settings.json`, updating the Windows Firewall
 rule and restarting the adapter through InsLauncher. It does not require publishing the adapter again.
 
+The unauthenticated `GET /health` endpoint reports whether the HTTP process is ready. It does not
+open a Sfera session or verify the connection to nexo, so it can be used by the installer and local monitoring.
+
 In the Development environment, Swagger UI is available at one of the URLs configured by the selected launch profile, for example:
 
 ```text

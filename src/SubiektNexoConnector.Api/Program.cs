@@ -49,6 +49,7 @@ try
         builder.Environment);
 
     builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+    builder.Services.AddHealthChecks();
     builder.Services.AddProblemDetails(options =>
     {
         options.CustomizeProblemDetails = context =>
@@ -107,6 +108,7 @@ try
 
     app.UseHttpsRedirection();
     app.UseApiAuthentication(apiAuthenticationOptions);
+    app.MapHealthChecks("/health").AllowAnonymous();
     app.MapControllers().RequireApiAuthentication(apiAuthenticationOptions);
 
     app.Run();
