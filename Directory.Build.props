@@ -1,5 +1,8 @@
 <Project>
   <PropertyGroup>
+    <Authors>Kamil Kasjaniuk</Authors>
+    <Company>Kamil Kasjaniuk</Company>
+    <Copyright>Copyright © 2026 Kamil Kasjaniuk. All rights reserved.</Copyright>
     <!-- Prefer the documented env var; command-line -p:NexoSdkPath still wins as a global MSBuild property. -->
     <NexoSdkPath Condition="'$(NEXO_SDK_PATH)' != ''">$(NEXO_SDK_PATH)</NexoSdkPath>
     <NexoSdkPath Condition="'$(NexoSdkPath)' == ''">$(NEXO_SDK_PATH)</NexoSdkPath>

@@ -263,3 +263,13 @@ It currently resolves warehouses and prints their symbols and names.
 - Broader reference-data and document-related resources.
 - More infrastructure-level verification against a controlled nexo test environment.
 - Improved observability for live SDK calls, locks and validation failures.
+
+## License
+
+Copyright (c) 2026 Kamil Kasjaniuk. All rights reserved.
+
+This is proprietary software. No permission is granted to use, copy, modify,
+distribute, or create derivative works without the copyright holder's prior
+express written permission. See [LICENSE](LICENSE) for the complete terms.
+
+Licensing inquiries: [github.com/Kasjan95](https://github.com/Kasjan95).
