@@ -4,6 +4,10 @@ SubiektNexoConnector is a local REST adapter for InsERT nexo. It keeps the vendo
 
 The connector currently supports product, warehouse and party workflows. In addition to reads, it exposes selected write operations, nested party addresses and contacts, custom field values, custom field definitions and flags.
 
+## Project Status
+
+Pilot-stage integration software, not a production-qualified installer. The repository demonstrates both an HTTP boundary around a stateful vendor SDK and the Windows deployment lifecycle needed to operate it. Manual updates, repair and uninstall are implemented; live migration, failure recovery and unattended startup still require acceptance testing on supported Windows/nexo combinations.
+
 ## Key Capabilities
 
 - Product listing, search, details, creation, partial updates and deletion.
@@ -15,6 +19,8 @@ The connector currently supports product, warehouse and party workflows. In addi
 - Flag assignment and removal through product and party PATCH requests.
 - API key authentication, RFC 7807-style problem responses and Swagger UI.
 - Application and HTTP-level tests that do not require a live nexo database.
+- WPF deployment wizard with external per-instance configuration, protected API-key export and Windows integration.
+- Manual versioned updates, persisted operation state, repair and scoped uninstall.
 
 ## Why This Adapter Exists
 
@@ -23,6 +29,14 @@ InsERT nexo integrations are naturally built in C# through the nexo SDK and Sfer
 This project translates between those two worlds. Public DTOs stay independent of the vendor model, while the infrastructure layer owns session management, nexo mapping, object locking and persistence.
 
 More detailed trade-offs are documented in Polish in [docs/decyzje-architektoniczne.md](docs/decyzje-architektoniczne.md).
+
+## Engineering Focus
+
+- **Vendor isolation:** HTTP DTOs and use cases do not expose nexo business objects.
+- **Stateful SDK boundary:** serialized Sfera access, queue deadlines and explicit object-locking/persistence rules.
+- **Operational lifecycle:** InsLauncher startup, password-logon scheduled tasks, scoped firewall rules and per-instance ACLs.
+- **Failure visibility:** HTTP health is distinct from an authenticated Sfera test; updates also check the running binary's release metadata.
+- **Test boundaries:** in-memory HTTP tests, deployment policy tests and opt-in Windows integration tests; live SDK acceptance is a separate responsibility.
 
 ## Current API Surface
 
@@ -100,6 +114,10 @@ Text values and identifier collections are normalized and validated before the i
 - `SubiektNexoConnector.Core` - use-case handlers, repository interfaces, commands, queries and public DTOs.
 - `SubiektNexoConnector.Infrastructure` - nexo SDK/Sfera integration, mapping, locking, persistence and configuration binding.
 - `SubiektNexoConnector.Console` - a small local entry point for quick SDK-backed checks.
+- `SubiektNexoConnector.Deployment` - WPF wizard, deployment state, InsERT packaging boundary and Windows lifecycle operations.
+- `SubiektNexoConnector.Deployment.Tests` - packaging, configuration, update policy, failure handling and opt-in Windows tests.
+- `tools/SubiektNexoConnector.Deployment.PayloadBuilder` - selects and archives the distributable adapter payload.
+- `tools/SubiektNexoConnector.Deployment.UiProbe` - offline WPF rendering and read-only package contract checks.
 - `SubiektNexoConnector.Core.Tests` - application-layer unit tests.
 - `SubiektNexoConnector.Api.Tests` - controller and HTTP contract tests based on `WebApplicationFactory` and substituted repositories.
 
@@ -218,12 +236,65 @@ rule and restarting the adapter through InsLauncher. It does not require publish
 The unauthenticated `GET /health` endpoint reports whether the HTTP process is ready. It does not
 open a Sfera session or verify the connection to nexo, so it can be used by the installer and local monitoring.
 
-In the Development environment, Swagger UI is available at one of the URLs configured by the selected launch profile, for example:
+## Building the Installer
+
+From the repository root:
+
+```powershell
+.\scripts\Publish-Deployment.ps1
+```
+
+The script asks which version component to increment: **major release**, **new features**, **fixes** or **revision**. Lower components reset to zero. Confirming saves the four-part version in `Release.props`. Select **use current version** to retry a failed publish without another increment:
+
+```powershell
+.\scripts\Publish-Deployment.ps1 -VersionLevel Current
+```
+
+It runs tests, publishes the adapter, selects its runtime payload, extracts the official `PackageDeployer.dll` from the locally installed InsERT SDK and embeds both payloads in one framework-dependent Windows x64 executable:
 
 ```text
-https://localhost:7214/swagger
-http://localhost:5151/swagger
+artifacts\deployment-release\SubiektNexoConnector.Setup.exe
 ```
+
+Only this EXE is needed on the target computer. The adjacent `release.json` records build metadata and prevents overwriting the same/newer version in that output directory; `.sha256` allows file-integrity checks. They are not installer runtime dependencies.
+
+The build machine needs the .NET SDK and `NEXO_SDK_PATH`. The client needs nexo, its applicable Sfera license, and the **.NET 8 Windows Desktop x64 runtime**, but not the SDK. Windows PowerShell 5.1 and PowerShell 7 are supported by the publish helpers. Git is optional for test builds; missing Git metadata is explicitly marked `nogit`. Production publishing requires a clean Git checkout and code-signing parameters; ordinary local publishing produces an unsigned test build.
+
+The repository does not include vendor SDK binaries or customer configuration. Packaging rejects development `appsettings*.json` and selects dependencies from the published runtime metadata. Do not add vendor binaries or generated customer packages to source control.
+
+## Installer Workflow
+
+The wizard selects one instance and one nexo database, creates an MPKG and deploys it through the official InsERT component. The instance name determines the stable launch scenario, `--instance` argument and ProgramData configuration directory.
+
+- Operator credentials and one API key are stored in protected external `settings.json`; an additional protected TXT export can be explicitly copied to the backend.
+- Seq forwarding and the desktop shortcut are optional; local rolling logs remain available without Seq.
+- The inbound TCP rule supports explicit backend IP/CIDR ranges and selected Windows network profiles. `LocalSubnet` is available for a controlled pilot LAN.
+- The Windows account is selected through the native credential dialog. A full password-logon boot task uses that account's InsLauncher profile; a Windows Hello PIN is not a password.
+- Administrative access is needed for firewall, task, ACL and machine-wide registration changes. The adapter account can read configuration and modify its log directory.
+- Installation checks HTTP health and authenticated `GET /warehouses`, then tests startup through the scheduled task. Health alone does not prove Sfera access.
+- An optional restart test records verification after boot. A SYSTEM verifier by itself does **not** prove the adapter was available before the first interactive login; that timing still needs independent acceptance verification.
+
+Local logs are kept under:
+
+```text
+C:\ProgramData\SubiektNexoConnector\instances\<instance>\logs\adapter-YYYYMMDD.log
+```
+
+### Repair, update and uninstall
+
+**Repair** reconciles the existing installation using its cached MPKG. **Update** uses a newer payload while retaining the original package family, instance, database, configuration and API key. A successful update must verify the running version and informational version, not just an open HTTP port. The target package and its hash are persisted for resuming an interrupted update. Downgrades and automatic rollback are not supported.
+
+**Uninstall** targets the selected instance's local resources and nexo association; shared server package data is retained. Configuration/log deletion is a separate explicit action. Offline local removal is recorded as incomplete until the server association can be removed.
+
+Legacy pilot import has known recovery and configuration-preservation gaps. Older adapters without maintenance endpoints may require manual process closure before updating. These are documented limitations, not a claim of seamless migration for every historical pilot.
+
+### Security and release boundaries
+
+This pilot serves HTTP inside a controlled LAN, not an Internet-facing HTTPS service. API keys and operator passwords in the protected configuration are **not encrypted at rest by the application**. An exported API-key TXT is a secret and must be handled as such. Windows account passwords are passed to Task Scheduler rather than written to connector files.
+
+`GET /maintenance/info` requires an API key and reports configured instance/release metadata. Its company label is configuration, not independent proof of the live database identity. `POST /maintenance/stop` additionally requires a loopback connection.
+
+See the [manual update and versioning guide](docs/manual-adapter-update.md), [production-readiness plan](docs/installer-production-readiness-plan.md) and [legacy migration review](docs/pilot-migration-review.md) for details and outstanding acceptance work. These documents are in Polish.
 
 ## Testing
 
@@ -241,6 +312,16 @@ dotnet test SubiektNexoConnector.sln
 
 The API tests start the ASP.NET Core pipeline in memory and replace infrastructure repositories with test doubles. They verify routing, serialization, status codes, validation and problem responses without modifying nexo data.
 
+Deployment's Windows integration tests are opt-in, require an elevated PowerShell and previously built test binaries:
+
+```powershell
+.\scripts\Test-WindowsDeployment.ps1
+```
+
+They create temporary test resources in Windows; they are not run automatically by ordinary publish. Version-selection helper tests can be run separately with `scripts/Test-ReleaseVersion.ps1` and are also run by publish.
+
+Some tests tagged `KnownMigrationDefect` characterize known incorrect behavior. A passing test count is therefore not a production-readiness certificate. Test live nexo deployment, two-instance isolation, password-logon startup and interruption recovery separately.
+
 ## Console Entry Point
 
 The console project resolves the same infrastructure services and can be used for quick local checks:
@@ -257,7 +338,9 @@ It currently resolves warehouses and prints their symbols and names.
 - Requests currently use live SDK sessions; there is no cache layer yet.
 - Repository operations are synchronous because they wrap synchronous vendor APIs.
 - The public surface intentionally covers selected integration scenarios rather than the entire nexo model.
-- Packaging and launcher integration still require the tooling described in the InsERT nexo SDK documentation.
+- The pilot boot task starts InsLauncher and requests Task Scheduler retries when its action reports failure.
+  Whether a particular InsLauncher version remains attached to the adapter process after launch must still
+  be verified during the crash/restart scenario; backend health monitoring remains the reliable outage signal.
 
 ## Roadmap
 

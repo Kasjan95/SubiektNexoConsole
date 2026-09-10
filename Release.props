@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <!-- One release number for adapter, Setup and MPKG. Increment before publishing changed binaries. -->
+    <ReleaseVersion>0.6.1.5</ReleaseVersion>
+    <Version>$(ReleaseVersion)</Version>
+    <AssemblyVersion>$(ReleaseVersion)</AssemblyVersion>
+    <FileVersion>$(ReleaseVersion)</FileVersion>
+  </PropertyGroup>
+</Project>

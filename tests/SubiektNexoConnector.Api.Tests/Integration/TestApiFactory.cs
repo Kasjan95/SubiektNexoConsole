@@ -45,11 +45,17 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Development");
+        builder.UseSetting("Auth:Mode", "ApiKey");
+        builder.UseSetting("Auth:HeaderName", ApiKeyAuthenticationDefaults.HeaderName);
+        builder.UseSetting("Auth:ApiKey", ValidTestApiKey);
 
         builder.ConfigureAppConfiguration((_, config) =>
         {
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
+                ["Auth:Mode"] = "ApiKey",
+                ["Auth:HeaderName"] = ApiKeyAuthenticationDefaults.HeaderName,
+                ["Auth:ApiKey"] = ValidTestApiKey,
                 ["Nexo:Database:SqlServer"] = "test-sql",
                 ["Nexo:Database:DatabaseName"] = "test-db",
                 ["Nexo:Database:UseWindowsAuth"] = "true",

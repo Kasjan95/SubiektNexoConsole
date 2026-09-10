@@ -54,9 +54,10 @@ public static class ApiAuthenticationExtensions
         return app;
     }
 
-    public static ControllerActionEndpointConventionBuilder RequireApiAuthentication(
-        this ControllerActionEndpointConventionBuilder endpoints,
+    public static T RequireApiAuthentication<T>(
+        this T endpoints,
         ApiAuthenticationOptions apiAuthenticationOptions)
+        where T : IEndpointConventionBuilder
     {
         if (apiAuthenticationOptions.Mode == ApiAuthenticationMode.ApiKey)
             endpoints.RequireAuthorization();

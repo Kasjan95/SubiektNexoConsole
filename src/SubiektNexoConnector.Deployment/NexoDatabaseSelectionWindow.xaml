@@ -1,0 +1,41 @@
+<Window x:Class="SubiektNexoConnector.Deployment.NexoDatabaseSelectionWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Wybór podmiotu Nexo" Height="430" Width="650"
+        WindowStartupLocation="CenterOwner" ResizeMode="CanResizeWithGrip"
+        ShowInTaskbar="False">
+    <Grid Margin="24">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock FontSize="20" FontWeight="SemiBold" Text="Wybierz podmiot dla adaptera" />
+            <TextBlock Margin="0,6,0,0" Foreground="DimGray" TextWrapping="Wrap"
+                       Text="Wybór dotyczy jednej instalacji adaptera. Zmiany zostaną wykonane dopiero po podsumowaniu i potwierdzeniu operacji." />
+        </StackPanel>
+
+        <ListBox x:Name="DatabaseListBox" Grid.Row="1" ItemsSource="{Binding}"
+                 DisplayMemberPath="Description" SelectionMode="Single"
+                 MouseDoubleClick="DatabaseListBox_MouseDoubleClick">
+            <ListBox.ItemContainerStyle>
+                <Style TargetType="ListBoxItem">
+                    <Setter Property="IsEnabled" Value="{Binding CanDeploy}" />
+                    <Setter Property="Padding" Value="8" />
+                </Style>
+            </ListBox.ItemContainerStyle>
+        </ListBox>
+
+        <TextBlock Grid.Row="2" Margin="0,12,0,12" Foreground="DimGray" TextWrapping="Wrap"
+                   Text="Wyszarzone bazy nie spełniają wymagań wersji pakietu." />
+
+        <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right">
+            <Button Content="Anuluj" Padding="18,7" Margin="0,0,10,0" IsCancel="True" />
+            <Button Content="Wybierz podmiot" Padding="18,7"
+                    IsDefault="True" Click="InstallButton_Click" />
+        </StackPanel>
+    </Grid>
+</Window>

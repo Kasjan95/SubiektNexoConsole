@@ -15,6 +15,9 @@ Log.Logger = new LoggerConfiguration()
 try
 {
     var startupOptions = AdapterStartupOptions.Parse(args);
+    using var instanceLock = startupOptions.Mode == AdapterStartupMode.InsLauncher
+        ? AdapterInstanceLock.Acquire(startupOptions.InstanceName!)
+        : null;
     var builder = WebApplication.CreateBuilder(startupOptions.HostArguments.ToArray());
     string? instanceSettingsPath = null;
 
@@ -79,6 +82,7 @@ try
         startupOptions.UseLocalNexoConnection);
 
     var app = builder.Build();
+    var runtimeApiAuthenticationOptions = app.Services.GetRequiredService<ApiAuthenticationOptions>();
 
     Log.Information(
         "Adapter starting in {StartupMode} mode for instance {AdapterInstance}. InstanceSettingsPath: {InstanceSettingsPath}",
@@ -104,12 +108,30 @@ try
         {
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "SubiektNexoConnector.Api v1");
         });
+        app.UseHttpsRedirection();
     }
 
-    app.UseHttpsRedirection();
-    app.UseApiAuthentication(apiAuthenticationOptions);
+    app.UseApiAuthentication(runtimeApiAuthenticationOptions);
     app.MapHealthChecks("/health").AllowAnonymous();
-    app.MapControllers().RequireApiAuthentication(apiAuthenticationOptions);
+    if (runtimeApiAuthenticationOptions.Mode == ApiAuthenticationMode.ApiKey)
+    {
+    app.MapGet("/maintenance/info", () => Results.Ok(new
+    {
+        instance = startupOptions.InstanceName,
+        configuredCompany = builder.Configuration["Observability:NexoCompany"],
+        processId = Environment.ProcessId,
+        version = typeof(Program).Assembly.GetName().Version?.ToString(),
+        informationalVersion = System.Reflection.CustomAttributeExtensions.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>(typeof(Program).Assembly)?.InformationalVersion
+    })).RequireApiAuthentication(runtimeApiAuthenticationOptions);
+    app.MapPost("/maintenance/stop", (HttpContext context, IHostApplicationLifetime lifetime) =>
+    {
+        if (context.Connection.RemoteIpAddress is null || !System.Net.IPAddress.IsLoopback(context.Connection.RemoteIpAddress))
+            return Results.StatusCode(StatusCodes.Status403Forbidden);
+        context.Response.OnCompleted(() => { lifetime.StopApplication(); return Task.CompletedTask; });
+        return Results.Accepted();
+    }).RequireApiAuthentication(runtimeApiAuthenticationOptions);
+    }
+    app.MapControllers().RequireApiAuthentication(runtimeApiAuthenticationOptions);
 
     app.Run();
 }

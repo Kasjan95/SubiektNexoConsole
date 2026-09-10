@@ -370,3 +370,6 @@ FodyWeavers.xsd
 
 # Local deployment planning notes
 /docs/pilot-deployment-plan.local.md
+/docs
+/output/pdf
+/tmp/pdfs

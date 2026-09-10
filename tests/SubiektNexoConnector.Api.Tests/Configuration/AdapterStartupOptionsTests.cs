@@ -7,6 +7,18 @@ namespace SubiektNexoConnector.Api.Tests.Configuration;
 public sealed class AdapterStartupOptionsTests
 {
     [Fact]
+    public void AdapterInstanceLock_RejectsSecondProcessForTheSameInstance()
+    {
+        var instanceName = $"test-{Guid.NewGuid():N}";
+        using var first = AdapterInstanceLock.Acquire(instanceName);
+
+        var action = () => AdapterInstanceLock.Acquire(instanceName);
+
+        var exception = Assert.Throws<InvalidOperationException>(action);
+        Assert.Contains("jest już uruchomiona", exception.Message);
+    }
+
+    [Fact]
     public void Parse_LocalConfiguration_SelectsExplicitConnectionAndFiltersCustomArgument()
     {
         var options = AdapterStartupOptions.Parse(

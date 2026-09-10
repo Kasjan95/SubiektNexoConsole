@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="Release.props" />
   <PropertyGroup>
     <Authors>Kamil Kasjaniuk</Authors>
     <Company>Kamil Kasjaniuk</Company>

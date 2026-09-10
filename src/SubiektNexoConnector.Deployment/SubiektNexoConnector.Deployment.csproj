@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.17763.0</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(AdapterPayloadPath)' != ''">
+    <EmbeddedResource Include="$(AdapterPayloadPath)"
+                      LogicalName="SubiektNexoConnector.Deployment.Resources.adapter-payload.zip" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(PackageDeployerPath)' != ''">
+    <EmbeddedResource Include="$(PackageDeployerPath)"
+                      LogicalName="SubiektNexoConnector.Deployment.Resources.package-deployer.dll" />
+  </ItemGroup>
+
+  <Target Name="ValidateEmbeddedAdapterPayload" BeforeTargets="CoreCompile" Condition="'$(EmbedAdapterPayload)' == 'true'">
+    <Error Condition="'$(AdapterPayloadPath)' == ''"
+           Text="AdapterPayloadPath must be provided when EmbedAdapterPayload=true." />
+    <Error Condition="'$(AdapterPayloadPath)' != '' And !Exists('$(AdapterPayloadPath)')"
+           Text="Adapter payload archive was not found at '$(AdapterPayloadPath)'." />
+  </Target>
+
+  <Target Name="ValidateEmbeddedPackageDeployer" BeforeTargets="CoreCompile" Condition="'$(EmbedPackageDeployer)' == 'true'">
+    <Error Condition="'$(PackageDeployerPath)' == ''"
+           Text="PackageDeployerPath must be provided when EmbedPackageDeployer=true." />
+    <Error Condition="'$(PackageDeployerPath)' != '' And !Exists('$(PackageDeployerPath)')"
+           Text="PackageDeployer assembly was not found at '$(PackageDeployerPath)'." />
+  </Target>
+</Project>
