@@ -133,13 +133,18 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
         public PartyDetailsDto? GetDetailsParty(GetPartyDetailsQuery query)
         {
             ArgumentNullException.ThrowIfNull(query);
-            return _sferaExecutor.Execute(sfera =>
-            {
-            Podmiot? party = sfera.Podmioty().Dane.Wszystkie(a => a.Sygnatura.PelnaSygnatura == query.PartySignature).FirstOrDefault();
+            return _sferaExecutor.Execute(sfera => GetDetailsPartyCore(sfera, query.PartySignature));
+        }
+
+        private static PartyDetailsDto? GetDetailsPartyCore(Uchwyt sfera, string partySignature)
+        {
+            Podmiot? party = sfera.Podmioty().Dane
+                .Wszystkie(item => item.Sygnatura.PelnaSygnatura == partySignature)
+                .FirstOrDefault();
             if (party == null)
                 return null;
 
-            var partyBo = sfera.Podmioty().Znajdz(party);
+            using var partyBo = sfera.Podmioty().Znajdz(party);
             if (partyBo is null)
                 return null;
 
@@ -194,7 +199,6 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 addresses,
                 contacts,
                 tradeCreditLimit);
-            });
         }
         #endregion
         #region PATCH
@@ -480,8 +484,17 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
         public PartyDetailsDto CreateParty(CreatePartyCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
-            var partySignature = _sferaExecutor.Execute(sfera =>
+            return _sferaExecutor.Execute(sfera =>
             {
+                var partySignature = CreatePartyCore(sfera, command);
+                return GetDetailsPartyCore(sfera, partySignature)
+                    ?? throw new InvalidOperationException(
+                        $"Created party '{partySignature}' could not be read back.");
+            });
+        }
+
+        private static string CreatePartyCore(Uchwyt sfera, CreatePartyCommand command)
+        {
             using var partyBo = command.Type switch
             {
                 1 => sfera.Podmioty().UtworzOsobe(),
@@ -542,9 +555,6 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             }
             partyBo.Odblokuj();
             return party.Sygnatura.PelnaSygnatura;
-            });
-
-            return GetDetailsParty(new GetPartyDetailsQuery(partySignature))!;
         }
         public CreatePartyAddressResult? CreatePartyAddress(CreatePartyAddressCommand command)
         {

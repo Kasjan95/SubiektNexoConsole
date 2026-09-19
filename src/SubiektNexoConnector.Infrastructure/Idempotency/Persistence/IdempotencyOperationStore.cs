@@ -176,23 +176,26 @@ public sealed class IdempotencyOperationStore(
             IdempotencyRequestHasher.Compute(method, requestTarget, body), createdAtUtc);
 
         await using var db = await contextFactory.CreateDbContextAsync(cancellationToken);
-        var inserted = await db.Database.ExecuteSqlInterpolatedAsync($"""
+        var inserted = await db.Operations.FromSqlInterpolated($"""
             INSERT INTO "IdempotencyOperations"
                 ("ClientId", "Key", "Method", "RequestTarget", "RequestHash", "State", "CreatedAtUtc", "UpdatedAtUtc")
             VALUES
                 ({operation.ClientId}, {operation.Key}, {operation.Method}, {operation.RequestTarget},
                  {operation.RequestHash}, {operation.State.ToString()}, {operation.CreatedAtUtc}, {operation.UpdatedAtUtc})
-            ON CONFLICT ("ClientId", "Key") DO NOTHING;
-            """, cancellationToken);
+            ON CONFLICT ("ClientId", "Key") DO NOTHING
+            RETURNING *;
+            """).AsNoTracking().ToListAsync(cancellationToken);
 
-        // The unique index is the atomic admission ticket. Whether this request inserted
-        // it or lost the race, compare against the single canonical database record.
+        if (inserted.Count == 1)
+            return new(IdempotencyCreateOutcome.Created, inserted[0]);
+        if (inserted.Count != 0)
+            throw new InvalidOperationException("The idempotency insert returned more than one operation.");
+
+        // No row returned means the unique index rejected this insert. Only then read
+        // the canonical operation to distinguish a retry from key reuse.
         var persisted = await db.Operations.AsNoTracking().SingleAsync(
             item => item.ClientId == clientId && item.Key == key,
             cancellationToken);
-
-        if (inserted == 1)
-            return new(IdempotencyCreateOutcome.Created, persisted);
 
         var matches = persisted.Method == operation.Method
             && persisted.RequestTarget == operation.RequestTarget
