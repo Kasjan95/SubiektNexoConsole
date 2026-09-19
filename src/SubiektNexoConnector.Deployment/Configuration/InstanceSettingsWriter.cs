@@ -8,6 +8,8 @@ namespace SubiektNexoConnector.Deployment.Configuration;
 
 public sealed class InstanceSettingsWriter
 {
+    public const string IdempotencyDatabaseFileName = "idempotency.db";
+
     public JsonObject? ReadForEdit(string instanceName, string? commonApplicationDataPath = null)
     {
         var path = GetSettingsPath(instanceName, commonApplicationDataPath);
@@ -61,6 +63,7 @@ public sealed class InstanceSettingsWriter
         }
 
         var settingsPath = GetSettingsPath(request.InstanceName, commonApplicationDataPath);
+        var idempotencyDatabasePath = GetIdempotencyDatabasePath(request.InstanceName, commonApplicationDataPath);
         SafePath.EnsureNoReparsePoints(settingsPath);
         if (File.Exists(settingsPath) && !request.OverwriteExisting)
             throw new IOException($"Konfiguracja instancji już istnieje: {settingsPath}");
@@ -111,6 +114,10 @@ public sealed class InstanceSettingsWriter
                     ["DefaultPageSize"] = 100,
                     ["MaxPageSize"] = 1000
                 }
+            },
+            ["Idempotency"] = new JsonObject
+            {
+                ["DatabasePath"] = idempotencyDatabasePath
             },
             ["Nexo"] = new JsonObject
             {
@@ -166,6 +173,7 @@ public sealed class InstanceSettingsWriter
             Set(existing, "Auth", "HeaderName", "X-Api-Key");
             Set(existing, "Observability", "NexoCompany", request.NexoCompany.Trim());
             Set(existing, "Observability", "AdapterInstance", request.InstanceName);
+            Set(existing, "Idempotency", "DatabasePath", idempotencyDatabasePath);
             var nexo = existing["Nexo"] as JsonObject ?? new JsonObject();
             if (existing["Nexo"] is null) existing["Nexo"] = nexo;
             Set(nexo, "SystemLogin", "NexoUser", request.NexoUser.Trim());
@@ -197,6 +205,22 @@ public sealed class InstanceSettingsWriter
         return new InstanceSettingsResult(settingsPath);
     }
 
+    public string EnsureIdempotencyConfiguration(
+        string instanceName,
+        string? commonApplicationDataPath = null)
+    {
+        var settingsPath = GetSettingsPath(instanceName, commonApplicationDataPath);
+        SafePath.EnsureNoReparsePoints(settingsPath);
+        var settings = JsonNode.Parse(File.ReadAllText(settingsPath)) as JsonObject
+            ?? throw new InvalidDataException("Konfiguracja nie jest obiektem JSON. Zachowano oryginał.");
+        var databasePath = GetIdempotencyDatabasePath(instanceName, commonApplicationDataPath);
+        Set(settings, "Idempotency", "DatabasePath", databasePath);
+        DeploymentStore.AtomicWrite(
+            settingsPath,
+            settings.ToJsonString(new JsonSerializerOptions { WriteIndented = true }));
+        return databasePath;
+    }
+
     private static void Set(JsonObject root, string section, string key, string value)
     {
         if (root[section] is null) root[section] = new JsonObject();
@@ -212,5 +236,13 @@ public sealed class InstanceSettingsWriter
             throw new InvalidOperationException("Nie można ustalić katalogu ProgramData.");
 
         return Path.Combine(root, "SubiektNexoConnector", "instances", instanceName, "settings.json");
+    }
+
+    public static string GetIdempotencyDatabasePath(
+        string instanceName,
+        string? commonApplicationDataPath = null)
+    {
+        var instanceDirectory = Path.GetDirectoryName(GetSettingsPath(instanceName, commonApplicationDataPath))!;
+        return Path.Combine(instanceDirectory, "data", IdempotencyDatabaseFileName);
     }
 }

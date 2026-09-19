@@ -97,6 +97,45 @@ The party list accepts `customerStatus`, `type`, `search`, `page` and `pageSize`
 
 Custom field values are returned in product and party details. They can be updated by sending `basicFields` or `advancedFields` in the corresponding PATCH request. A flag can be assigned, updated or removed through the `flag` property.
 
+## Business Write Idempotency
+
+All controller `POST`, `PUT`, `PATCH` and `DELETE` endpoints automatically require an authenticated client and an
+`Idempotency-Key` header (1–64 visible ASCII characters). Generate a key for each
+new operation and reuse it for retries with the same method, URL and exact body
+bytes. JSON whitespace changes also count as a different request. This includes
+nested address/contact writes. Technical minimal endpoints, such as
+`/maintenance/stop`, and reads are excluded. Middleware and Swagger use the same
+`IdempotencyPolicy`; no per-action attribute is needed. New protected writes must
+use `SferaExecutor` and finish within the HTTP request, not in background work.
+
+Swagger UI exposes the header as optional and generates a random key when it is
+left empty. The generated key appears in the curl command. Each execution with
+an empty field gets a new key; enter a previous key explicitly to test a retry.
+The backend still requires the header for protected writes.
+
+- Before entering Sfera, the request is persisted as `Pending`; after connecting,
+  `Executing` is persisted before the business callback can run.
+- Success is buffered until `Completed` and the response are persisted. A retry
+  replays the original status, body, content type and Location, with
+  `Idempotency-Replayed: true`.
+- A duplicate still in progress returns `409`, code
+  `idempotency_operation_in_progress`, and `Retry-After: 5`. Reusing a key for a
+  different request returns `409` with `idempotency_key_reused`.
+- An exception after execution starts, or inability to persist its result,
+  returns `409` with `idempotency_result_indeterminate`. The UI should tell the
+  user to check the resource list for POST, the current resource data for PATCH/PUT,
+  or whether the resource still exists for DELETE. Do not automatically retry with a new key:
+  the Sfera write may already have succeeded.
+- A failure before business execution releases the pending claim, allowing a
+  same-key retry. At startup, interrupted `Executing` operations become
+  `Indeterminate` and abandoned `Pending` claims are removed. A database-specific
+  process lock prevents two adapter processes from using the same configured file.
+
+SQLite and Sfera do not share an atomic transaction. Completed rows have a 72-hour
+expiry timestamp, but automatic expiry cleanup is not implemented yet. With
+`Auth:Mode=None`, protected write endpoints return `401`; enable API-key
+authentication when testing them locally.
+
 ## PATCH Semantics
 
 PATCH request DTOs distinguish an omitted property from an explicitly supplied `null` value:

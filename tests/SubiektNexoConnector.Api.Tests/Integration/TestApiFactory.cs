@@ -10,6 +10,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
+using SubiektNexoConnector.Infrastructure.Idempotency;
+using SubiektNexoConnector.Infrastructure.Idempotency.Persistence;
 using SubiektNexoConnector.Api.Auth;
 using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Core.Application.Parties.Shared;
@@ -24,6 +26,7 @@ namespace SubiektNexoConnector.Api.Tests.Integration;
 
 public sealed class TestApiFactory : WebApplicationFactory<Program>
 {
+    private readonly System.Collections.Concurrent.ConcurrentBag<string> _databaseDirectories = new();
     public const string ValidTestApiKey = "integration-test-api-key";
 
     public IProductRepository Products { get; } = Substitute.For<IProductRepository>();
@@ -39,7 +42,7 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
             {
                 services.AddSingleton<IPolicyEvaluator, AllowAllPolicyEvaluator>();
             });
-        }).CreateClient();
+        }).CreateDefaultClient(new TestIdempotencyHeaderHandler());
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -51,9 +54,12 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureAppConfiguration((_, config) =>
         {
+            var directory = Path.Combine(Path.GetTempPath(), "connector-http-tests", Guid.NewGuid().ToString("N"));
+            _databaseDirectories.Add(directory);
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Auth:Mode"] = "ApiKey",
+                ["Idempotency:DatabasePath"] = Path.Combine(directory, "test.db"),
                 ["Auth:HeaderName"] = ApiKeyAuthenticationDefaults.HeaderName,
                 ["Auth:ApiKey"] = ValidTestApiKey,
                 ["Nexo:Database:SqlServer"] = "test-sql",
@@ -78,11 +84,36 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
                 HeaderName = ApiKeyAuthenticationDefaults.HeaderName,
                 ApiKey = ValidTestApiKey
             });
-            services.AddSingleton(Products);
+            services.AddSingleton<IProductRepository>(provider => TestIdempotencyRepositoryProxy<IProductRepository>.Wrap(
+                Products, provider.GetRequiredService<IdempotencyExecutionAccessor>(),
+                provider.GetRequiredService<IdempotencyOperationStore>()));
             services.AddSingleton(Warehouses);
-            services.AddSingleton(Parties);
+            services.AddSingleton<IPartyRepository>(provider => TestIdempotencyRepositoryProxy<IPartyRepository>.Wrap(
+                Parties, provider.GetRequiredService<IdempotencyExecutionAccessor>(),
+                provider.GetRequiredService<IdempotencyOperationStore>()));
             services.AddSingleton(AdditionalFieldDefinitions);
         });
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        base.Dispose(disposing);
+        if (disposing)
+            CleanupDatabases();
+    }
+
+    public override async ValueTask DisposeAsync()
+    {
+        await base.DisposeAsync();
+        CleanupDatabases();
+    }
+
+    private void CleanupDatabases()
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        while (_databaseDirectories.TryTake(out var directory))
+            if (Directory.Exists(directory))
+                Directory.Delete(directory, recursive: true);
     }
 
     private sealed class AllowAllPolicyEvaluator : IPolicyEvaluator

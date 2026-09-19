@@ -1,12 +1,16 @@
+using Serilog;
 using SubiektNexoConnector.Api.Auth;
 using SubiektNexoConnector.Api.Configuration;
 using SubiektNexoConnector.Api.ErrorHandling;
 using SubiektNexoConnector.Api.Observability;
 using SubiektNexoConnector.Api.Swagger;
 using SubiektNexoConnector.Infrastructure;
-using Serilog;
+using SubiektNexoConnector.Infrastructure.Idempotency;
+using SubiektNexoConnector.Api.Idempotency;
+using SubiektNexoConnector.Infrastructure.Idempotency.Persistence;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
 
 Log.Logger = new LoggerConfiguration()
     .WriteTo.Console()
@@ -75,13 +79,25 @@ try
     {
         options.AddApiAuthenticationSwagger(apiAuthenticationOptions);
         options.SchemaFilter<OptionalSchemaFilter>();
+        options.OperationFilter<IdempotencyOperationFilter>();
     });
 
-    builder.Services.AddNexoInfrastructure(
-        builder.Configuration,
-        startupOptions.UseLocalNexoConnection);
+    builder.Services.AddNexoInfrastructure(builder.Configuration, startupOptions.UseLocalNexoConnection);
+    builder.Services.AddIdempotencyPersistence(builder.Configuration);
 
     var app = builder.Build();
+    var configuredDatabasePath = builder.Configuration["Idempotency:DatabasePath"]!;
+    var fullDatabasePath = System.IO.Path.GetFullPath(configuredDatabasePath, AppContext.BaseDirectory);
+    var databaseLockName = "db-" + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(
+        System.Text.Encoding.UTF8.GetBytes(fullDatabasePath.ToUpperInvariant())));
+    using var databaseLock = AdapterInstanceLock.Acquire(databaseLockName);
+    var dbContextFactory = app.Services.GetRequiredService<IDbContextFactory<IdempotencyDbContext>>();
+
+    await using (var dbContext = await dbContextFactory.CreateDbContextAsync())
+    {
+        await dbContext.Database.MigrateAsync();
+    }
+    await app.Services.GetRequiredService<IdempotencyOperationStore>().RecoverInterruptedAsync();
     var runtimeApiAuthenticationOptions = app.Services.GetRequiredService<ApiAuthenticationOptions>();
 
     Log.Information(
@@ -107,11 +123,14 @@ try
         app.UseSwaggerUI(c =>
         {
             c.SwaggerEndpoint("/swagger/v1/swagger.json", "SubiektNexoConnector.Api v1");
+            c.UseRequestInterceptor(IdempotencyRequestInterceptor.Script);
+            c.ConfigObject.AdditionalItems["showMutatedRequest"] = true;
         });
         app.UseHttpsRedirection();
     }
 
     app.UseApiAuthentication(runtimeApiAuthenticationOptions);
+    app.UseMiddleware<IdempotencyMiddleware>();
     app.MapHealthChecks("/health").AllowAnonymous();
     if (runtimeApiAuthenticationOptions.Mode == ApiAuthenticationMode.ApiKey)
     {

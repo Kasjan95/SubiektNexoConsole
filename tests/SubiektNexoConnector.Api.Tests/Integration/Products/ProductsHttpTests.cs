@@ -103,7 +103,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
-    public async Task CreateProduct_Returns400ProblemDetails_WhenCreationFails()
+    public async Task CreateProduct_ReturnsIndeterminateProblemDetails_WhenExecutionThrows()
     {
         var request = new CreateProductRequestDto(
             "Test product",
@@ -116,13 +116,13 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
 
         var response = await _client.PostAsJsonAsync("/products", request);
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
 
         var body = await response.Content.ReadFromJsonAsync<ProblemDetails>();
         body.Should().NotBeNull();
-        body!.Status.Should().Be(StatusCodes.Status400BadRequest);
-        body.Title.Should().Be("Bad Request");
-        body.Detail.Should().Be("Product already exists.");
+        body!.Status.Should().Be(StatusCodes.Status409Conflict);
+        body.Title.Should().Be("Operation result is uncertain");
+        body.Detail.Should().Contain("Check the resource list");
         body.Instance.Should().Be("/products");
     }
 
@@ -259,6 +259,38 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
         var response = await _client.PatchAsJsonAsync("/products/ABC-123", request);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+    }
+
+    [Theory]
+    [InlineData("PATCH", HttpStatusCode.OK)]
+    [InlineData("DELETE", HttpStatusCode.NoContent)]
+    public async Task WriteRetry_ReplaysOriginalResponseAndCallsRepositoryOnce(string method, HttpStatusCode expected)
+    {
+        var sku = "retry-" + Guid.NewGuid().ToString("N");
+        var key = Guid.NewGuid().ToString("N");
+        _factory.Products.Patch(Arg.Is<PatchProductCommand>(c => c.ProductSku == sku)).Returns(sku);
+        _factory.Products.Delete(Arg.Is<DeleteProductCommand>(c => c.SKU == sku))
+            .Returns(DeleteProductResult.Deleted, DeleteProductResult.NotFound);
+        HttpRequestMessage Request()
+        {
+            var request = new HttpRequestMessage(new HttpMethod(method), "/products/" + sku);
+            request.Headers.Add("Idempotency-Key", key);
+            if (method == "PATCH")
+                request.Content = JsonContent.Create(new { Name = "Updated" });
+            return request;
+        }
+        using var firstRequest = Request();
+        using var first = await _client.SendAsync(firstRequest);
+        using var secondRequest = Request();
+        using var second = await _client.SendAsync(secondRequest);
+        Assert.Equal(expected, first.StatusCode);
+        Assert.Equal(first.StatusCode, second.StatusCode);
+        Assert.Equal(await first.Content.ReadAsStringAsync(), await second.Content.ReadAsStringAsync());
+        Assert.Equal("true", second.Headers.GetValues("Idempotency-Replayed").Single());
+        if (method == "PATCH")
+            _factory.Products.Received(1).Patch(Arg.Is<PatchProductCommand>(c => c.ProductSku == sku));
+        else
+            _factory.Products.Received(1).Delete(Arg.Is<DeleteProductCommand>(c => c.SKU == sku));
     }
 
     private static bool HasAdditionalFieldUpdates(PatchProductCommand command)

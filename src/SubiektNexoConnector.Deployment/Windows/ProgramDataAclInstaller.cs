@@ -13,6 +13,7 @@ public sealed class ProgramDataAclInstaller
         ProtectedDirectory.ResetFile(Path.Combine(directory, "settings.json"), sid);
         ProtectedDirectory.ResetFile(Path.Combine(directory, "settings.json.backup"));
         ProtectedDirectory.Create(Path.Combine(directory, "logs"), sid, modify: true);
+        ProtectedDirectory.Create(Path.Combine(directory, "data"), sid, modify: true);
         ProtectedDirectory.Create(Path.Combine(directory, "maintenance"));
         return directory;
     }

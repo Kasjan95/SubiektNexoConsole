@@ -314,7 +314,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
-    public async Task DeletePartyAddress_Returns400ProblemDetails_WhenNexoRejectsDeletion()
+    public async Task DeletePartyAddress_ReturnsIndeterminateProblemDetails_WhenExecutionThrows()
     {
         const string errorMessage = "Party address deletion failed:\nAdresPodstawowy: A primary address is required.";
         _factory.Parties.DeletePartyAddress(Arg.Any<DeletePartyAddressCommand>())
@@ -322,10 +322,10 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
 
         var response = await _client.DeleteAsync("/parties/PARTY-001/addresses/123");
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
         var body = await response.Content.ReadFromJsonAsync<ProblemDetails>();
         body.Should().NotBeNull();
-        body!.Detail.Should().Be(errorMessage);
+        body!.Detail.Should().Contain("Check whether the resource still exists");
         body.Instance.Should().Be("/parties/PARTY-001/addresses/123");
     }
 
@@ -488,7 +488,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
-    public async Task PatchParty_Returns400ProblemDetails_WhenPartyGroupDoesNotExist()
+    public async Task PatchParty_ReturnsIndeterminateProblemDetails_WhenExecutionThrows()
     {
         _factory.Parties
             .PatchParty(Arg.Any<PatchPartyCommand>())
@@ -498,13 +498,13 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
             "/parties/PARTY-001",
             new { PartyGroupId = 999999 });
 
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.StatusCode.Should().Be(HttpStatusCode.Conflict);
 
         var body = await response.Content.ReadFromJsonAsync<ProblemDetails>();
         body.Should().NotBeNull();
-        body!.Status.Should().Be(StatusCodes.Status400BadRequest);
-        body.Title.Should().Be("Bad Request");
-        body.Detail.Should().Be("Party group '999999' was not found.");
+        body!.Status.Should().Be(StatusCodes.Status409Conflict);
+        body.Title.Should().Be("Operation result is uncertain");
+        body.Detail.Should().Contain("Check the current resource data");
         body.Instance.Should().Be("/parties/PARTY-001");
     }
 

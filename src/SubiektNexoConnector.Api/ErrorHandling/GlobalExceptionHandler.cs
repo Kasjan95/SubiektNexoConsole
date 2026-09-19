@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
+using SubiektNexoConnector.Api.Idempotency;
 using SubiektNexoConnector.Infrastructure.Abstractions;
+using SubiektNexoConnector.Infrastructure.Idempotency;
 
 namespace SubiektNexoConnector.Api.ErrorHandling;
 
@@ -25,7 +27,13 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
         Exception exception,
         CancellationToken cancellationToken)
     {
-        if (exception is SferaQueueTimeoutException queueTimeout)
+        if (exception is IdempotencyStorageException { IsBusy: true } storageBusy)
+        {
+            _logger.LogWarning(exception,
+                "Idempotency storage remained locked during {StorageOperation} for {Method} {Path}.",
+                storageBusy.OperationName, httpContext.Request.Method, httpContext.Request.Path);
+        }
+        else if (exception is SferaQueueTimeoutException queueTimeout)
         {
             _logger.LogWarning(
                 "Request {Method} {Path} timed out while waiting for Sfera. Retry after {RetryAfterSeconds} seconds.",
@@ -43,6 +51,8 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
         }
 
         var problemDetails = CreateProblemDetails(httpContext, exception);
+        if (exception is IdempotencyStorageException { IsBusy: true })
+            httpContext.Response.Headers.RetryAfter = "2";
 
         if (exception is SferaQueueTimeoutException timeoutException)
         {
@@ -68,6 +78,33 @@ public sealed class GlobalExceptionHandler : IExceptionHandler
 
     private ProblemDetails CreateProblemDetails(HttpContext httpContext, Exception exception)
     {
+        if (exception is IdempotencyIndeterminateException)
+        {
+            var problem = new ProblemDetails
+            {
+                Status = StatusCodes.Status409Conflict,
+                Title = "Operation result is uncertain",
+                Detail = IdempotencyPolicy.IndeterminateDetail(httpContext.Request.Method),
+                Instance = httpContext.Request.Path
+            };
+            problem.Extensions["code"] = "idempotency_result_indeterminate";
+            return problem;
+        }
+
+        if (exception is IdempotencyStorageException storage)
+        {
+            var problem = new ProblemDetails
+            {
+                Status = storage.IsBusy ? StatusCodes.Status503ServiceUnavailable : StatusCodes.Status500InternalServerError,
+                Title = storage.IsBusy ? "Idempotency storage is temporarily busy" : "Idempotency storage failure",
+                Detail = "The idempotency storage operation could not be confirmed. Do not submit this operation with a new idempotency key.",
+                Instance = httpContext.Request.Path,
+                Type = "urn:subiekt-nexo-connector:error:idempotency-storage"
+            };
+            problem.Extensions["code"] = storage.IsBusy ? "idempotency_storage_busy" : "idempotency_storage_failure";
+            return problem;
+        }
+
         if (exception is SferaQueueTimeoutException queueTimeout)
         {
             var problemDetails = new ProblemDetails

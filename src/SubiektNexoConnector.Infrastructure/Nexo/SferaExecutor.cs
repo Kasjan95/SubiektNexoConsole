@@ -4,6 +4,8 @@ using SubiektNexoConnector.Infrastructure.Abstractions;
 using SubiektNexoConnector.Infrastructure.Configuration;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using SubiektNexoConnector.Infrastructure.Idempotency;
+using SubiektNexoConnector.Infrastructure.Idempotency.Persistence;
 
 namespace SubiektNexoConnector.Infrastructure.Nexo;
 
@@ -14,15 +16,21 @@ public sealed class SferaExecutor : ISferaExecutor, IDisposable
     private readonly ILogger<SferaExecutor> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private int _pendingOperations;
+    private readonly IdempotencyOperationStore? _idempotencyStore;
+    private readonly IdempotencyExecutionAccessor? _idempotencyAccessor;
 
     public SferaExecutor(
         ISessionFactory sessionFactory,
         SferaExecutionOptions options,
-        ILogger<SferaExecutor> logger)
+        ILogger<SferaExecutor> logger,
+        IdempotencyOperationStore? idempotencyStore = null,
+        IdempotencyExecutionAccessor? idempotencyAccessor = null)
     {
         _sessionFactory = sessionFactory;
         _options = options;
         _logger = logger;
+        _idempotencyStore = idempotencyStore;
+        _idempotencyAccessor = idempotencyAccessor;
     }
 
     public T Execute<T>(
@@ -59,6 +67,14 @@ public sealed class SferaExecutor : ISferaExecutor, IDisposable
 
             executionStopwatch.Start();
             using var sfera = _sessionFactory.Create();
+            var execution = _idempotencyAccessor?.Current;
+            if (execution?.OperationId is long id && !execution.ExecutionStarted)
+            {
+                if (_idempotencyStore is null || !_idempotencyStore
+                    .MarkExecutingAsync(id, DateTimeOffset.UtcNow).GetAwaiter().GetResult())
+                    throw new InvalidOperationException("The idempotency operation cannot enter Executing.");
+                execution.MarkExecutionStarted();
+            }
             var result = operation(sfera);
             success = true;
             return result;

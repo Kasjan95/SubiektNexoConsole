@@ -37,6 +37,7 @@ public sealed class AdapterUpdateTests : IDisposable
         var publish = Path.Combine(_root, "publish"); Directory.CreateDirectory(publish);
         File.WriteAllText(Path.Combine(publish, MpkgBuilder.AdapterExecutableName), "test-payload");
         File.WriteAllText(Path.Combine(publish, "LICENSE"), "test-license");
+        File.WriteAllText(Path.Combine(publish, "THIRD-PARTY-NOTICES.txt"), "test third-party notices");
         File.WriteAllText(Path.Combine(publish, "SubiektNexoConnector.Api.runtimeconfig.json"), "{}");
         File.WriteAllText(Path.Combine(publish, "SubiektNexoConnector.Api.dll"), "test-library");
         File.WriteAllText(Path.Combine(publish, "SubiektNexoConnector.Api.deps.json"), """

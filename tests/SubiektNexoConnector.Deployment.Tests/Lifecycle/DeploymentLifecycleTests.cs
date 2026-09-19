@@ -120,6 +120,9 @@ public sealed class DeploymentLifecycleTests : IDisposable
         Assert.Equal(120, updated["Nexo"]!["SferaExecution"]!["QueueTimeoutSeconds"]!.GetValue<int>());
         Assert.Equal("keep", updated["CustomFutureOption"]!.GetValue<string>());
         Assert.Equal("KEY", updated["Auth"]!["ApiKey"]!.GetValue<string>());
+        Assert.Equal(
+            InstanceSettingsWriter.GetIdempotencyDatabasePath("test", _root),
+            updated["Idempotency"]!["DatabasePath"]!.GetValue<string>());
         Assert.DoesNotContain((JsonArray)updated["Serilog"]!["WriteTo"]!, node => node?["Name"]?.GetValue<string>() == "Seq");
         Assert.True(File.Exists(path + ".backup"));
     }

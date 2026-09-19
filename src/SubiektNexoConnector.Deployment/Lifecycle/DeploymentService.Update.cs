@@ -107,6 +107,12 @@ public sealed partial class DeploymentService
                 }
                 await _ports.WaitUntilAvailableAsync(settings.Port, TimeSpan.FromSeconds(45), ct);
             }),
+            new("update-idempotency-storage", "Konfiguracja magazynu idempotencji", ct =>
+            {
+                new ProgramDataAclInstaller().Install(state.Instance, state.Account);
+                new InstanceSettingsWriter().EnsureIdempotencyConfiguration(state.Instance);
+                return Task.CompletedTask;
+            }),
             new("update-package", "Aktualizacja pakietu wybranego podmiotu", async ct =>
             {
                 ct.ThrowIfCancellationRequested();

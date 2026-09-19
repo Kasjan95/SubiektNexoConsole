@@ -373,3 +373,4 @@ FodyWeavers.xsd
 /docs
 /output/pdf
 /tmp/pdfs
+/tools/Invoke-PartiesIdempotencyProbe.ps1

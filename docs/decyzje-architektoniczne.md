@@ -181,7 +181,7 @@ Identyfikator korelacyjny oraz klucz idempotencji rozwiązują dwa różne probl
 - request/trace ID służy do śledzenia żądania w logach,
 - `Idempotency-Key` zapobiega wielokrotnemu wykonaniu tej samej operacji zapisu.
 
-Samo `X-Request-Id` nie chroni przed duplikatami. Dla operacji `POST`, `PATCH` i wybranych `DELETE` klient integracyjny powinien móc przesłać `Idempotency-Key`. Adapter zapisuje wtedy:
+Samo `X-Request-Id` nie chroni przed duplikatami. Dla wszystkich biznesowych operacji `POST`, `PUT`, `PATCH` i `DELETE` klient integracyjny musi przesłać `Idempotency-Key`. Adapter zapisuje wtedy:
 
 - klucz i tożsamość klienta,
 - metodę i ścieżkę,
@@ -191,7 +191,41 @@ Samo `X-Request-Id` nie chroni przed duplikatami. Dla operacji `POST`, `PATCH` i
 
 Ponowienie identycznego żądania z tym samym kluczem zwraca wcześniej zapisany wynik bez ponownego wywołania Sfery. Użycie tego samego klucza dla innej treści powinno zakończyć się `409 Conflict`.
 
-Magazyn idempotencji musi przeżyć co najmniej typowe ponowienia klienta. Pamięć procesu może wystarczyć jako etap lokalny, ale nie chroni po restarcie ani przy wielu instancjach API. Docelowo potrzebny jest współdzielony lub trwały magazyn z polityką TTL.
+Magazyn idempotencji musi przeżyć co najmniej typowe ponowienia klienta. Dla pilota wybrano trwały, lokalny magazyn SQLite per instancja adaptera, z unikalnym indeksem `(ClientId, Key)`. Pamięć procesu nie zastępuje tego magazynu, ponieważ nie chroni po restarcie. Lokalny plik SQLite nie stanowi też współdzielonej gwarancji dla niezależnych procesów korzystających z różnych baz.
+
+### Automatyczna polityka dla zapisów HTTP
+
+Decyzja z 2026-09-18: wszystkie endpointy kontrolerów korzystające z `POST`, `PUT`, `PATCH` lub `DELETE` automatycznie wymagają uwierzytelnionej tożsamości oraz `Idempotency-Key`. Dotyczy to również adresów i kontaktów. Wspólna `IdempotencyPolicy` jest używana przez middleware i Swagger; nie trzeba pamiętać o atrybucie na każdej metodzie. Odczyty oraz techniczne minimal endpoints, takie jak `/maintenance/stop`, są poza tą polityką. Kontrolery stanowią obecnie granicę biznesowego API; nowy kontroler techniczny wymaga świadomego dostosowania polityki.
+
+Chroniony zapis musi przechodzić przez `SferaExecutor` i kończyć się w ramach żądania HTTP. `Executing` jest utrwalany przed callbackiem biznesowym, a `Completed` wraz z odpowiedzią przed wysłaniem jej klientowi. Powiązanie ze Sferą, odtwarzanie odpowiedzi i odzyskiwanie po restarcie są zaimplementowane; testy akceptacyjne na żywej Sferze pozostają wymagane.
+
+Niepewny wynik zwraca `409` z kodem `idempotency_result_indeterminate`. Dla POST klient sprawdza listę zasobów, dla PATCH/PUT aktualne dane, a dla DELETE to, czy zasób nadal istnieje. Nie generuje automatycznie nowego klucza. Idempotencja nie zapewnia kolejności różnych żądań ani kontroli współbieżnych edycji. Koszt lokalnego magazynu jest akceptowany w zamian za brak ponownego wejścia do Sfery i odtworzenie pierwotnej odpowiedzi, również dla operacji naturalnie idempotentnych.
+
+### Rozłączenie klienta po przyjęciu zapisu
+
+Decyzja z 2026-09-19: po utworzeniu trwałego wpisu `Pending` i ostatnim sprawdzeniu anulowania dalsze wykonanie chronionego zapisu nie zależy od połączenia klienta. Middleware zachowuje oryginalny `HttpContext.RequestAborted`, a na czas kontrolera, wykonania w Sferze i serializacji odpowiedzi zastępuje go tokenem, który nie jest anulowany przez rozłączenie. Zapobiega to utrwaleniu `Completed` ze statusem i nagłówkami, ale z uciętym lub pustym body, gdy timeout klienta nastąpi podczas serializacji.
+
+Odpowiedź jest najpierw w całości budowana w lokalnym buforze i zapisywana w SQLite. Dopiero potem middleware przywraca token klienta i próbuje skopiować gotową odpowiedź do połączenia. Anulowanie tego końcowego kopiowania jest oczekiwanym rozłączeniem, które zostaje odnotowane informacyjnie, ale nie trafia do globalnej obsługi jako błąd serwera. Nieudane wysłanie nie cofa `Completed`; retry z tym samym kluczem odtwarza pełną odpowiedź. Jest to świadoma semantyka: po przyjęciu zapisu zmiana zachowania klienta nie anuluje operacji biznesowej. Limity kolejki i błędy serwera nadal obowiązują niezależnie od tokenu klienta.
+
+Odłączenie dotyczy wyłącznie żywotności połączenia HTTP. Twarde zakończenie procesu nadal przerywa pracę: `Executing` zostanie po restarcie oznaczone jako `Indeterminate`, a przerwane `Pending` usunięte. Oryginalny token jest używany przy końcowym kopiowaniu odpowiedzi, więc serwer nie próbuje podtrzymywać martwego połączenia.
+
+### Pamięć jako pierwsze sito idempotencji — opcja odroczona
+
+Decyzja z 2026-09-18: nie dodajemy obecnie cache idempotencji w pamięci. Przy zakładanym ruchu około 1000 żądań na godzinę nie mamy pomiarów wskazujących, że dostęp do SQLite jest wąskim gardłem. Dodatkowy cache wprowadza koszt synchronizacji stanów, wygaszania i unieważniania wpisów. Trwała bramka HTTP, powiązanie stanów ze Sferą, odtwarzanie odpowiedzi i odzyskiwanie po restarcie są zaimplementowane bez dodatkowej warstwy pamięci.
+
+Warstwę pamięci można rozważyć jako pierwsze sito duplikatów w przypadku wyjątkowo niestabilnych kontraktów lub integracji: częstych timeoutów, zerwanych połączeń i ponowień identycznych żądań z tym samym kluczem w krótkich seriach. Nie chodzi o zmienny payload pod tym samym kluczem — takie żądanie nadal musi zostać odrzucone jako konflikt. Podstawą decyzji powinny być pomiary udziału duplikatów, chwilowych skoków ruchu, czasu dostępu do SQLite i liczby błędów blokady, a nie sama średnia liczba żądań na godzinę.
+
+Jeśli cache zostanie wprowadzony, obowiązują następujące zasady:
+
+- Kluczem cache jest `(ClientId, Key)`, a wpis zawiera również `RequestHash`. Trafienie z innym hashem nie może ominąć kontroli konfliktu.
+- Brak wpisu w pamięci prowadzi do próby `INSERT` w SQLite. Dopiero potwierdzony zapis nowej operacji stanowi bilet wstępu do wykonania operacji biznesowej w Sferze.
+- Wpis nowej operacji trafia do pamięci dopiero po potwierdzonym zapisie w SQLite. Konflikt unikalności wymaga odczytu istniejącej operacji i porównania żądania; nie daje zgody na ponowne wykonanie.
+- Dwa równoległe żądania mogą oba ominąć pusty cache. Ostateczną ochroną pozostaje unikalny indeks SQLite, nie obecność wpisu w pamięci.
+- Zmiana stanu w pamięci następuje po potwierdzonym zapisie stanu w SQLite. Przy awarii zapisu odpowiedni wpis cache należy unieważnić.
+- Cache przechowuje niemutowalne snapshoty, nie `DbContext` ani śledzone encje EF Core. Ma ograniczony rozmiar i czas życia; jego utrata lub wygaszenie powoduje powrót do SQLite, nie utratę ochrony.
+- Najprostszy wariant przechowuje tylko aktywne operacje, aby szybko odrzucać ich duplikaty. Odtwarzanie ukończonych odpowiedzi pozostaje w SQLite; cache odpowiedzi jest osobną, późniejszą optymalizacją.
+
+SQLite pozostaje źródłem prawdy. Nie zastępujemy trwałych zapisów asynchronicznym flushowaniem stanu z pamięci: awaria po zapisie w Nexo, ale przed utrwaleniem idempotencji mogłaby dopuścić duplikat po restarcie. Docelowy mechanizm potwierdza `Executing` przed operacją biznesową i utrwala `Completed` wraz z odpowiedzią przed wysłaniem jej klientowi. Jest to optymalizacja liczby odczytów, a nie druga niezależna gwarancja idempotencji ani zamiennik transakcji po stronie Nexo.
 
 Idempotencja nie zastępuje transakcyjności operacji po stronie nexo. Chroni przede wszystkim przed ponownym wykonaniem żądania, gdy klient nie otrzymał odpowiedzi i nie wie, czy pierwsza próba się powiodła.
 
@@ -237,4 +271,4 @@ Key decisions:
 
 The current execution model uses synchronous SDK calls. Concurrency limits, an SDK execution gate and a dedicated worker are evolutionary steps that should be introduced only after measuring real behavior. `SemaphoreSlim` can limit parallel calls but does not guarantee thread affinity; a single-reader queue and dedicated thread remain options if required by Sfera.
 
-The planned cache will explicitly identify `live` and `cached` data. Low-traffic installations may use an interval-based refresh worker instead of event infrastructure. Request correlation IDs are intended for diagnostics, while a separate durable `Idempotency-Key` mechanism is planned to prevent duplicate writes.
+The planned cache will explicitly identify `live` and `cached` data. Low-traffic installations may use an interval-based refresh worker instead of event infrastructure. Request correlation IDs are intended for diagnostics, while a separate durable `Idempotency-Key` mechanism protects controller POST, PUT, PATCH and DELETE operations against repeated execution.

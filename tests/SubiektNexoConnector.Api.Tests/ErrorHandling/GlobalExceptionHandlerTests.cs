@@ -5,11 +5,60 @@ using Microsoft.Extensions.Logging;
 using NSubstitute;
 using SubiektNexoConnector.Api.ErrorHandling;
 using SubiektNexoConnector.Infrastructure.Abstractions;
+using SubiektNexoConnector.Infrastructure.Idempotency;
 
 namespace SubiektNexoConnector.Api.Tests.ErrorHandling;
 
 public class GlobalExceptionHandlerTests
 {
+    [Theory]
+    [InlineData("POST", "Check the resource list")]
+    [InlineData("PATCH", "Check the current resource data")]
+    [InlineData("PUT", "Check the current resource data")]
+    [InlineData("DELETE", "Check whether the resource still exists")]
+    public async Task IndeterminateFailure_ExplainsHowToVerifyTheSpecificOperation(string method, string instruction)
+    {
+        var environment = Substitute.For<IHostEnvironment>();
+        var logger = Substitute.For<ILogger<GlobalExceptionHandler>>();
+        var service = Substitute.For<IProblemDetailsService>();
+        ProblemDetailsContext? captured = null;
+        service.TryWriteAsync(Arg.Do<ProblemDetailsContext>(value => captured = value))
+            .Returns(new ValueTask<bool>(true));
+        var context = new DefaultHttpContext();
+        context.Request.Method = method;
+        await new GlobalExceptionHandler(environment, logger, service).TryHandleAsync(context,
+            new IdempotencyIndeterminateException(new Exception("Uncertain result")), CancellationToken.None);
+        Assert.Equal(409, context.Response.StatusCode);
+        Assert.Equal("idempotency_result_indeterminate", captured!.ProblemDetails.Extensions["code"]);
+        Assert.Contains(instruction, captured.ProblemDetails.Detail!);
+        Assert.Contains("Do not resubmit with a new key", captured.ProblemDetails.Detail!);
+    }
+
+    [Theory]
+    [InlineData(true, 503, "idempotency_storage_busy")]
+    [InlineData(false, 500, "idempotency_storage_failure")]
+    public async Task StorageFailure_IsMappedWithoutExposingDatabaseDetails(bool busy, int status, string code)
+    {
+        var environment = Substitute.For<IHostEnvironment>();
+        environment.EnvironmentName.Returns(Environments.Production);
+        var logger = Substitute.For<ILogger<GlobalExceptionHandler>>();
+        var service = Substitute.For<IProblemDetailsService>();
+        ProblemDetailsContext? captured = null;
+        service.TryWriteAsync(Arg.Do<ProblemDetailsContext>(value => captured = value))
+            .Returns(new ValueTask<bool>(true));
+        var context = new DefaultHttpContext();
+        var exception = new IdempotencyStorageException("CreateAsync", busy,
+            new Exception("Sensitive database path"));
+        await new GlobalExceptionHandler(environment, logger, service)
+            .TryHandleAsync(context, exception, CancellationToken.None);
+        Assert.Equal(status, context.Response.StatusCode);
+        Assert.Equal(code, captured!.ProblemDetails.Extensions["code"]);
+        Assert.DoesNotContain("Sensitive", captured.ProblemDetails.Detail!);
+        Assert.Equal(busy ? "2" : "", context.Response.Headers.RetryAfter.ToString());
+        Assert.Contains(logger.ReceivedCalls(), call => call.GetMethodInfo().Name == "Log"
+            && Equals(call.GetArguments()[0], busy ? LogLevel.Warning : LogLevel.Error));
+    }
+
     [Fact]
     public async Task TryHandleAsync_ReturnsBadRequestProblemDetails_ForInvalidOperationException()
     {

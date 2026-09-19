@@ -30,6 +30,9 @@ public sealed class InstanceSettingsWriterTests : IDisposable
         Assert.Equal("TEST-API-KEY", root.GetProperty("Auth").GetProperty("ApiKey").GetString());
         Assert.Equal("laptop-pilot", root.GetProperty("Observability").GetProperty("AdapterInstance").GetString());
         Assert.Equal("Szef", root.GetProperty("Nexo").GetProperty("SystemLogin").GetProperty("NexoUser").GetString());
+        Assert.Equal(
+            Path.Combine(_root, "SubiektNexoConnector", "instances", "laptop-pilot", "data", "idempotency.db"),
+            root.GetProperty("Idempotency").GetProperty("DatabasePath").GetString());
         Assert.False(root.GetProperty("Nexo").TryGetProperty("Database", out _));
         Assert.Contains(
             "Serilog.Sinks.File",
@@ -37,6 +40,31 @@ public sealed class InstanceSettingsWriterTests : IDisposable
         Assert.Contains(
             root.GetProperty("Serilog").GetProperty("WriteTo").EnumerateArray(),
             sink => sink.GetProperty("Name").GetString() == "File");
+    }
+
+    [Fact]
+    public void EnsureIdempotencyConfiguration_AddsPathAndPreservesExistingSettings()
+    {
+        var settingsPath = InstanceSettingsWriter.GetSettingsPath("pilot-existing", _root);
+        Directory.CreateDirectory(Path.GetDirectoryName(settingsPath)!);
+        File.WriteAllText(settingsPath, """
+            {
+              "Auth": { "ApiKey": "KEEP" },
+              "CustomFutureOption": "keep"
+            }
+            """);
+
+        var databasePath = new InstanceSettingsWriter()
+            .EnsureIdempotencyConfiguration("pilot-existing", _root);
+
+        using var document = JsonDocument.Parse(File.ReadAllText(settingsPath));
+        var root = document.RootElement;
+        Assert.Equal("KEEP", root.GetProperty("Auth").GetProperty("ApiKey").GetString());
+        Assert.Equal("keep", root.GetProperty("CustomFutureOption").GetString());
+        Assert.Equal(databasePath, root.GetProperty("Idempotency").GetProperty("DatabasePath").GetString());
+        Assert.Equal(
+            Path.Combine(_root, "SubiektNexoConnector", "instances", "pilot-existing", "data", "idempotency.db"),
+            databasePath);
     }
 
     [Fact]

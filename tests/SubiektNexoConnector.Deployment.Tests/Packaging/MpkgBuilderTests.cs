@@ -89,6 +89,7 @@ public sealed class MpkgBuilderTests : IDisposable
         Assert.Equal(fileCount, archive.Entries.Count);
         Assert.NotNull(archive.GetEntry(MpkgBuilder.AdapterExecutableName));
         Assert.NotNull(archive.GetEntry("LICENSE"));
+        Assert.NotNull(archive.GetEntry("THIRD-PARTY-NOTICES.txt"));
         Assert.Null(archive.GetEntry("data/sample.txt"));
     }
 
@@ -116,6 +117,7 @@ public sealed class MpkgBuilderTests : IDisposable
         File.WriteAllText(Path.Combine(publish, MpkgBuilder.AdapterExecutableName), "test executable");
         File.WriteAllText(Path.Combine(publish, "SubiektNexoConnector.Api.dll"), "test library");
         File.WriteAllText(Path.Combine(publish, "LICENSE"), "test license");
+        File.WriteAllText(Path.Combine(publish, "THIRD-PARTY-NOTICES.txt"), "test third-party notices");
         File.WriteAllText(Path.Combine(publish, "SubiektNexoConnector.Api.runtimeconfig.json"), "{}");
         File.WriteAllText(Path.Combine(publish, "SubiektNexoConnector.Api.deps.json"), """
             {

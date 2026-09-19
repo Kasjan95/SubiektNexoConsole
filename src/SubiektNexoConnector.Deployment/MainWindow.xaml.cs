@@ -247,7 +247,7 @@ public partial class MainWindow : Window
             AppendActivity($"Wybrano podmiot: {_service.State!.Database}.");
             if (_updating)
             {
-                SummaryText.Text = $"Aktualizacja: {_service.UpdateDescription}\nInstancja: {_existing!.Instance}\nPodmiot: {_existing.Database}\nSerwer: {_existing.Server}\nKonto: {_existing.Account}\n\nsettings.json, klucz API, reguła zapory i zadanie pozostaną bez zmian.\nWymagana jest przerwa w działaniu adaptera. Nie wykonujemy automatycznego rollbacku.\nStary pilot bez endpointów maintenance może wymagać ręcznego zamknięcia przed aktualizacją.";
+                SummaryText.Text = $"Aktualizacja: {_service.UpdateDescription}\nInstancja: {_existing!.Instance}\nPodmiot: {_existing.Database}\nSerwer: {_existing.Server}\nKonto: {_existing.Account}\n\nKonfiguracja zostanie uzupełniona o lokalny magazyn idempotencji; klucz API, reguła zapory i zadanie pozostaną bez zmian.\nWymagana jest przerwa w działaniu adaptera. Nie wykonujemy automatycznego rollbacku.\nStary pilot bez endpointów maintenance może wymagać ręcznego zamknięcia przed aktualizacją.";
                 ShowPage(4); return;
             }
             if (_removing)

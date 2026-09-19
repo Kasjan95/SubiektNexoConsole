@@ -3,12 +3,10 @@ namespace SubiektNexoConnector.Api.Configuration;
 public sealed class AdapterInstanceLock : IDisposable
 {
     private readonly Mutex _mutex;
-    private bool _ownsMutex;
 
     private AdapterInstanceLock(Mutex mutex)
     {
         _mutex = mutex;
-        _ownsMutex = true;
     }
 
     public static AdapterInstanceLock Acquire(string instanceName)
@@ -17,7 +15,7 @@ public sealed class AdapterInstanceLock : IDisposable
             throw new ArgumentException("Nazwa instancji nie może być pusta.", nameof(instanceName));
 
         var mutex = new Mutex(
-            initiallyOwned: true,
+            initiallyOwned: false,
             $"Global\\SubiektNexoConnector-{instanceName}",
             out var createdNew);
         if (createdNew)
@@ -30,11 +28,8 @@ public sealed class AdapterInstanceLock : IDisposable
 
     public void Dispose()
     {
-        if (_ownsMutex)
-        {
-            _mutex.ReleaseMutex();
-            _ownsMutex = false;
-        }
+        // The live named-object handle is the lease. It is not thread-affine,
+        // so async startup/shutdown can dispose it on a different thread.
         _mutex.Dispose();
     }
 }

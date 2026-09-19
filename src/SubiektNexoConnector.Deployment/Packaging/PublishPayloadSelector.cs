@@ -39,6 +39,7 @@ public sealed class PublishPayloadSelector
         AddRequiredFile(selected, Path.Combine(root, "SubiektNexoConnector.Api.runtimeconfig.json"));
         AddOptionalFiles(selected, root, "SubiektNexoConnector.Api.staticwebassets*.json");
         AddRequiredFile(selected, Path.Combine(root, "LICENSE"));
+        AddRequiredFile(selected, Path.Combine(root, "THIRD-PARTY-NOTICES.txt"));
 
         foreach (var library in target.EnumerateObject())
         {
