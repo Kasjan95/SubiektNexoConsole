@@ -20,6 +20,7 @@ using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Core.Application.Warehouses;
 using SubiektNexoConnector.Infrastructure.Abstractions;
 using SubiektNexoConnector.Infrastructure.Configuration;
+using SubiektNexoConnector.Infrastructure.Materialization.Products;
 using SubiektNexoConnector.Infrastructure.Nexo;
 
 namespace SubiektNexoConnector.Infrastructure;
@@ -54,6 +55,7 @@ public static class DependencyInjection
         services.AddTransient<IWarehouseRepository, NexoWarehouseRepository>();
         services.AddTransient<IPartyRepository, NexoPartyRepository>();
         services.AddTransient<IAdditionalFieldDefinitionRepository, NexoAdditionalFieldDefinitionsRepository>();
+        services.AddScoped<IProductMaterializationWriter, ProductReadModelWriter>();
 
         services.AddTransient<CreateProductHandler>();
         services.AddTransient<PatchProductHandler>();
