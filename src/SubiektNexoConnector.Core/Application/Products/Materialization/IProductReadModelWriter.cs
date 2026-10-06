@@ -2,7 +2,7 @@ using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefini
 
 namespace SubiektNexoConnector.Core.Application.Products;
 
-public interface IProductMaterializationWriter
+public interface IProductReadModelWriter
 {
     Task UpsertAsync(
         ProductDetailsDto product,

@@ -1,4 +1,6 @@
 using InsERT.Moria.Sfera;
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetAdvancedFieldDefinitions;
@@ -20,6 +22,7 @@ using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Core.Application.Warehouses;
 using SubiektNexoConnector.Infrastructure.Abstractions;
 using SubiektNexoConnector.Infrastructure.Configuration;
+using SubiektNexoConnector.Infrastructure.Materialization.Persistence;
 using SubiektNexoConnector.Infrastructure.Materialization.Products;
 using SubiektNexoConnector.Infrastructure.Nexo;
 
@@ -55,7 +58,24 @@ public static class DependencyInjection
         services.AddTransient<IWarehouseRepository, NexoWarehouseRepository>();
         services.AddTransient<IPartyRepository, NexoPartyRepository>();
         services.AddTransient<IAdditionalFieldDefinitionRepository, NexoAdditionalFieldDefinitionsRepository>();
-        services.AddScoped<IProductMaterializationWriter, ProductReadModelWriter>();
+
+        var configuredReadModelPath = configuration["Materialization:DatabasePath"];
+        if (string.IsNullOrWhiteSpace(configuredReadModelPath))
+            throw new InvalidOperationException("Missing configuration: Materialization:DatabasePath.");
+
+        var readModelPath = Path.IsPathRooted(configuredReadModelPath)
+            ? Path.GetFullPath(configuredReadModelPath)
+            : Path.GetFullPath(configuredReadModelPath, AppContext.BaseDirectory);
+        Directory.CreateDirectory(Path.GetDirectoryName(readModelPath)!);
+        var readModelConnectionString = new SqliteConnectionStringBuilder
+        {
+            DataSource = readModelPath,
+            Mode = SqliteOpenMode.ReadWriteCreate
+        }.ToString();
+
+        services.AddDbContext<ReadModelDbContext>(options => options.UseSqlite(readModelConnectionString));
+        services.AddScoped<IProductReadModelWriter, ProductReadModelWriter>();
+        services.AddScoped<IProductReadModelReader, ProductReadModelReader>();
 
         services.AddTransient<CreateProductHandler>();
         services.AddTransient<PatchProductHandler>();

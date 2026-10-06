@@ -13,4 +13,9 @@ internal sealed class ProductEntity
     public string? FlagComment { get; set; }
     public int? SupplierLeadTimeDays { get; set; }
     public DateTime RefreshedAtUtc { get; set; }
+    public ProductBasicFieldsEntity? BasicFields { get; set; }
+    public ICollection<ProductAdvancedFieldEntity> AdvancedFields { get; set; } = [];
+    public ICollection<ProductPriceEntity> Prices { get; set; } = [];
+    public ICollection<ProductStockEntity> Stocks { get; set; } = [];
+    public ICollection<ProductSupplierEntity> Suppliers { get; set; } = [];
 }

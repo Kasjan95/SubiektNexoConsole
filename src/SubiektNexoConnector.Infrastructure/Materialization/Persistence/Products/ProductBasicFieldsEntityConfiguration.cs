@@ -10,7 +10,7 @@ internal sealed class ProductBasicFieldsEntityConfiguration : IEntityTypeConfigu
         builder.ToTable("ProductBasicFields");
         builder.HasKey(fields => fields.ProductId);
         builder.HasOne<ProductEntity>()
-            .WithOne()
+            .WithOne(product => product.BasicFields)
             .HasForeignKey<ProductBasicFieldsEntity>(fields => fields.ProductId)
             .OnDelete(DeleteBehavior.Cascade);
     }

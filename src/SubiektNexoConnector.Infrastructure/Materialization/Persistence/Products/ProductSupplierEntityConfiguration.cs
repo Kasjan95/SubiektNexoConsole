@@ -14,7 +14,10 @@ internal sealed class ProductSupplierEntityConfiguration : IEntityTypeConfigurat
             supplier.SupplierId
         });
         builder.Property(supplier => supplier.Name).IsRequired();
-        builder.HasOne<ProductEntity>().WithMany().HasForeignKey(supplier => supplier.ProductId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<ProductEntity>()
+            .WithMany(product => product.Suppliers)
+            .HasForeignKey(supplier => supplier.ProductId)
+            .OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(supplier => supplier.SupplierId);
     }
 }

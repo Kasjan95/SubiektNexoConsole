@@ -7,7 +7,7 @@ using SubiektNexoConnector.Infrastructure.Materialization.Persistence;
 
 namespace SubiektNexoConnector.Infrastructure.Materialization.Products;
 
-internal sealed class ProductReadModelWriter : IProductMaterializationWriter
+internal sealed class ProductReadModelWriter : IProductReadModelWriter
 {
     private readonly ReadModelDbContext _dbContext;
 

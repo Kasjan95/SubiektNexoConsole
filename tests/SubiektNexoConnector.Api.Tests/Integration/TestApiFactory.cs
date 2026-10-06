@@ -60,6 +60,7 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
             {
                 ["Auth:Mode"] = "ApiKey",
                 ["Idempotency:DatabasePath"] = Path.Combine(directory, "test.db"),
+                ["Materialization:DatabasePath"] = Path.Combine(directory, "read-model.db"),
                 ["Auth:HeaderName"] = ApiKeyAuthenticationDefaults.HeaderName,
                 ["Auth:ApiKey"] = ValidTestApiKey,
                 ["Nexo:Database:SqlServer"] = "test-sql",

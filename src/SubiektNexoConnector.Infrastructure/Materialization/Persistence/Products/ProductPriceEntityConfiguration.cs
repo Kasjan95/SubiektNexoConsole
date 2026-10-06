@@ -15,6 +15,9 @@ internal sealed class ProductPriceEntityConfiguration
             price.PriceLevelName
         });
         builder.Property(price => price.PriceLevelName).IsRequired();
-        builder.HasOne<ProductEntity>().WithMany().HasForeignKey(price => price.ProductId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<ProductEntity>()
+            .WithMany(product => product.Prices)
+            .HasForeignKey(price => price.ProductId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

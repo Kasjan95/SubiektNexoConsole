@@ -15,6 +15,9 @@ internal sealed class ProductStockEntityConfiguration
             stock.WarehouseSymbol
         });
         builder.Property(stock => stock.WarehouseSymbol).IsRequired();
-        builder.HasOne<ProductEntity>().WithMany().HasForeignKey(stock => stock.ProductId).OnDelete(DeleteBehavior.Cascade);
+        builder.HasOne<ProductEntity>()
+            .WithMany(product => product.Stocks)
+            .HasForeignKey(stock => stock.ProductId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }

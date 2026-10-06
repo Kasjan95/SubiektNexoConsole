@@ -13,7 +13,7 @@ internal sealed class ProductAdvancedFieldEntityConfiguration
         builder.Property(field => field.FieldId).IsRequired();
         builder.Property(field => field.DataType).HasConversion<string>().IsRequired();
         builder.HasOne<ProductEntity>()
-            .WithMany()
+            .WithMany(product => product.AdvancedFields)
             .HasForeignKey(field => field.ProductId)
             .OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(field => field.FieldId);
