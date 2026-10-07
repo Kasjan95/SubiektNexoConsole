@@ -54,6 +54,24 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
+    public async Task DeleteAsync(
+        string sku,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sku);
+
+        var product = await _dbContext.Products
+            .SingleOrDefaultAsync(
+                product => product.Sku == sku,
+                cancellationToken);
+
+        if (product is null)
+            return;
+
+        _dbContext.Products.Remove(product);
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
     private static void MapProduct(
         ProductEntity target,
         ProductDetailsDto source,

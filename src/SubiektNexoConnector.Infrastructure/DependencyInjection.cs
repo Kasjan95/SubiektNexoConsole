@@ -76,6 +76,7 @@ public static class DependencyInjection
         services.AddDbContext<ReadModelDbContext>(options => options.UseSqlite(readModelConnectionString));
         services.AddScoped<IProductReadModelWriter, ProductReadModelWriter>();
         services.AddScoped<IProductReadModelReader, ProductReadModelReader>();
+        services.AddScoped<IProductMaterializationRefresher, ProductMaterializationRefresher>();
 
         services.AddTransient<CreateProductHandler>();
         services.AddTransient<PatchProductHandler>();

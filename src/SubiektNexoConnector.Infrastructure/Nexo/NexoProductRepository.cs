@@ -1,13 +1,10 @@
 using InsERT.Moria.Asortymenty;
 using InsERT.Moria.Flagi;
 using InsERT.Moria.ModelDanych;
-using InsERT.Moria.Narzedzia.EPP.Typy;
 using InsERT.Moria.Narzedzia.PolaWlasne2;
-using InsERT.Moria.PolaWlasne;
 using InsERT.Moria.PolaWlasne2;
 using InsERT.Moria.Rozszerzanie;
 using InsERT.Moria.Sfera;
-using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Common;
 using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Infrastructure.Abstractions;
@@ -279,6 +276,28 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 UpdateProductFlag(sfera, product.Id, command.Flag.Value);
 
             return updatedSku;
+            });
+        }
+
+        public IReadOnlyCollection<ProductBasicDto> GetBatchAfterId(
+            int? afterId,
+            int batchSize)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
+
+            return _sferaExecutor.Execute(sfera =>
+            {
+                var products = sfera.Asortymenty().Dane.Wszystkie();
+
+                if (afterId.HasValue)
+                    products = products.Where(p => p.Id > afterId.Value);
+
+                return products
+                    .OrderBy(p => p.Id)
+                    .Take(batchSize)
+                    .AsEnumerable()
+                    .Select(MapBasicProduct)
+                    .ToList();
             });
         }
 

@@ -9,4 +9,7 @@ public interface IProductReadModelWriter
         IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> advancedFieldDefinitions,
         DateTime refreshedAtUtc,
         CancellationToken cancellationToken = default);
+    Task DeleteAsync(
+        string sku,
+        CancellationToken cancellationToken = default);
 }

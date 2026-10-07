@@ -99,6 +99,37 @@ public sealed class ProductReadModelWriterTests
         Assert.DoesNotContain("dictionary-guid", advancedFields);
     }
 
+    [Fact]
+    public async Task DeleteAsync_RemovesProductAndAllDependentData()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = CreateContext(connection);
+        await context.Database.EnsureCreatedAsync();
+        var writer = new ProductReadModelWriter(context);
+
+        await writer.UpsertAsync(
+            CreateProduct(
+                name: "Product to delete",
+                basicFields: [new("PoleWlasne1", "basic value")],
+                advancedFields: [new("text", "text value")],
+                suppliers: [new(10, "Supplier", null, true, null, null)],
+                prices: [new("Retail", 10m, 12.30m)],
+                stocks: [new("MAIN", 5m, 1m)]),
+            CreateDefinitions(),
+            new DateTime(2026, 10, 7, 8, 0, 0, DateTimeKind.Utc));
+        context.ChangeTracker.Clear();
+
+        await writer.DeleteAsync("SKU-1");
+
+        Assert.Empty(await context.Products.ToListAsync());
+        Assert.Empty(await context.ProductBasicFields.ToListAsync());
+        Assert.Empty(await context.ProductAdvancedFields.ToListAsync());
+        Assert.Empty(await context.ProductPrices.ToListAsync());
+        Assert.Empty(await context.ProductStocks.ToListAsync());
+        Assert.Empty(await context.ProductSuppliers.ToListAsync());
+    }
+
     private static ReadModelDbContext CreateContext(SqliteConnection connection)
     {
         var options = new DbContextOptionsBuilder<ReadModelDbContext>()

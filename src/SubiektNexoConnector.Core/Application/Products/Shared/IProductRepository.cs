@@ -10,5 +10,6 @@ namespace SubiektNexoConnector.Core.Application.Products
         string Create(CreateProductCommand command);
         string? Patch(PatchProductCommand command);
         DeleteProductResult Delete(DeleteProductCommand command);
+        IReadOnlyCollection<ProductBasicDto> GetBatchAfterId(int? afterId, int batchSize);
     }
 }
