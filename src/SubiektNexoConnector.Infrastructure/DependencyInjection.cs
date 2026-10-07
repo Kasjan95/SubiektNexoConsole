@@ -20,9 +20,11 @@ using SubiektNexoConnector.Core.Application.Parties.Contacts.DeleteContact;
 using SubiektNexoConnector.Core.Application.Parties.Contacts.PatchContact;
 using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Core.Application.Warehouses;
+using SubiektNexoConnector.Core.Materialization;
 using SubiektNexoConnector.Infrastructure.Abstractions;
 using SubiektNexoConnector.Infrastructure.Configuration;
 using SubiektNexoConnector.Infrastructure.Materialization.Persistence;
+using SubiektNexoConnector.Infrastructure.Materialization.Persistence.States;
 using SubiektNexoConnector.Infrastructure.Materialization.Products;
 using SubiektNexoConnector.Infrastructure.Nexo;
 
@@ -77,6 +79,7 @@ public static class DependencyInjection
         services.AddScoped<IProductReadModelWriter, ProductReadModelWriter>();
         services.AddScoped<IProductReadModelReader, ProductReadModelReader>();
         services.AddScoped<IProductMaterializationRefresher, ProductMaterializationRefresher>();
+        services.AddScoped<IMaterializationCheckpointStore, MaterializationCheckpointStore>();
 
         services.AddTransient<CreateProductHandler>();
         services.AddTransient<PatchProductHandler>();

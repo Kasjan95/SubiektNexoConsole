@@ -17,6 +17,36 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.25");
 
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.MaterializationStateEntity", b =>
+                {
+                    b.Property<string>("PolicyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("CycleStartedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastBatchCompletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastCycleCompletedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastErrorAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("NextCursor")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("PolicyKey");
+
+                    b.ToTable("MaterializationStates", (string)null);
+                });
+
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductAdvancedFieldEntity", b =>
                 {
                     b.Property<int>("ProductId")
@@ -232,7 +262,7 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductAdvancedFieldEntity", b =>
                 {
                     b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductEntity", null)
-                        .WithMany()
+                        .WithMany("AdvancedFields")
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -241,7 +271,7 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductBasicFieldsEntity", b =>
                 {
                     b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductEntity", null)
-                        .WithOne()
+                        .WithOne("BasicFields")
                         .HasForeignKey("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductBasicFieldsEntity", "ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -250,7 +280,7 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductPriceEntity", b =>
                 {
                     b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductEntity", null)
-                        .WithMany()
+                        .WithMany("Prices")
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -259,7 +289,7 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductStockEntity", b =>
                 {
                     b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductEntity", null)
-                        .WithMany()
+                        .WithMany("Stocks")
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -268,10 +298,23 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductSupplierEntity", b =>
                 {
                     b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductEntity", null)
-                        .WithMany()
+                        .WithMany("Suppliers")
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductEntity", b =>
+                {
+                    b.Navigation("AdvancedFields");
+
+                    b.Navigation("BasicFields");
+
+                    b.Navigation("Prices");
+
+                    b.Navigation("Stocks");
+
+                    b.Navigation("Suppliers");
                 });
 #pragma warning restore 612, 618
         }

@@ -15,6 +15,7 @@ internal sealed class ReadModelDbContext : DbContext
     public DbSet<ProductSupplierEntity> ProductSuppliers => Set<ProductSupplierEntity>();
     public DbSet<ProductBasicFieldsEntity> ProductBasicFields => Set<ProductBasicFieldsEntity>();
     public DbSet<ProductAdvancedFieldEntity> ProductAdvancedFields => Set<ProductAdvancedFieldEntity>();
+    public DbSet<MaterializationStateEntity> MaterializationStates => Set<MaterializationStateEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -24,5 +25,6 @@ internal sealed class ReadModelDbContext : DbContext
         modelBuilder.ApplyConfiguration(new ProductSupplierEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ProductBasicFieldsEntityConfiguration());
         modelBuilder.ApplyConfiguration(new ProductAdvancedFieldEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new MaterializationStateEntityConfiguration());
     }
 }
