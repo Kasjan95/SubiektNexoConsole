@@ -21,43 +21,45 @@ public sealed class ProductReadModelReaderTests
         var writer = new ProductReadModelWriter(context);
         var reader = new ProductReadModelReader(context);
         var product = CreateCompleteProduct();
+        var refreshedAtUtc = new DateTime(2026, 10, 6, 8, 0, 0, DateTimeKind.Utc);
 
         await writer.UpsertAsync(
             product,
             CreateDefinitions(),
-            new DateTime(2026, 10, 6, 8, 0, 0, DateTimeKind.Utc));
+            refreshedAtUtc);
         context.ChangeTracker.Clear();
 
         var result = await reader.GetDetailsAsync(product.SKU);
 
         Assert.NotNull(result);
-        Assert.Equal(product.Id, result.Id);
-        Assert.Equal(product.SKU, result.SKU);
-        Assert.Equal(product.Name, result.Name);
-        Assert.Equal(product.EAN, result.EAN);
-        Assert.Equal(product.Type, result.Type);
-        Assert.Equal(product.IsActive, result.IsActive);
-        Assert.Equal(product.Flag, result.Flag);
-        Assert.Equal(product.SupplierLeadTimeDays, result.SupplierLeadTimeDays);
-        Assert.Equal(product.BasicFields.ToArray(), result.BasicFields.ToArray());
+        Assert.Equal(refreshedAtUtc, result.RefreshedAtUtc);
+        Assert.Equal(product.Id, result.Product.Id);
+        Assert.Equal(product.SKU, result.Product.SKU);
+        Assert.Equal(product.Name, result.Product.Name);
+        Assert.Equal(product.EAN, result.Product.EAN);
+        Assert.Equal(product.Type, result.Product.Type);
+        Assert.Equal(product.IsActive, result.Product.IsActive);
+        Assert.Equal(product.Flag, result.Product.Flag);
+        Assert.Equal(product.SupplierLeadTimeDays, result.Product.SupplierLeadTimeDays);
+        Assert.Equal(product.BasicFields.ToArray(), result.Product.BasicFields.ToArray());
 
         foreach (var expectedField in product.AdvancedFields)
         {
             var actualField = Assert.Single(
-                result.AdvancedFields,
+                result.Product.AdvancedFields,
                 field => field.Id == expectedField.Id);
             Assert.Equal(expectedField.Value, actualField.Value);
         }
 
         Assert.Equal(
             product.DefaultSuppliers.OrderByDescending(supplier => supplier.IsPrimary).ThenBy(supplier => supplier.Id).ToArray(),
-            result.DefaultSuppliers.ToArray());
+            result.Product.DefaultSuppliers.ToArray());
         Assert.Equal(
             product.Prices.OrderBy(price => price.PriceLevelName, StringComparer.Ordinal).ToArray(),
-            result.Prices.ToArray());
+            result.Product.Prices.ToArray());
         Assert.Equal(
             product.Stocks.OrderBy(stock => stock.WarehouseSymbol, StringComparer.Ordinal).ToArray(),
-            result.Stocks.ToArray());
+            result.Product.Stocks.ToArray());
     }
 
     [Fact]

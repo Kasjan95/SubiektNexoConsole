@@ -8,6 +8,7 @@ using SubiektNexoConnector.Infrastructure;
 using SubiektNexoConnector.Infrastructure.Idempotency;
 using SubiektNexoConnector.Api.Idempotency;
 using SubiektNexoConnector.Infrastructure.Idempotency.Persistence;
+using SubiektNexoConnector.Infrastructure.Materialization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.EntityFrameworkCore;
@@ -97,6 +98,7 @@ try
     {
         await dbContext.Database.MigrateAsync();
     }
+    await app.Services.MigrateReadModelAsync();
     await app.Services.GetRequiredService<IdempotencyOperationStore>().RecoverInterruptedAsync();
     var runtimeApiAuthenticationOptions = app.Services.GetRequiredService<ApiAuthenticationOptions>();
 

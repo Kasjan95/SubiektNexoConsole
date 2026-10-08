@@ -17,6 +17,23 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.25");
 
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.MaterializationPolicyEntity", b =>
+                {
+                    b.Property<string>("PolicyKey")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("LifetimeSeconds")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PolicyKey");
+
+                    b.ToTable("MaterializationPolicies", (string)null);
+                });
+
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.MaterializationStateEntity", b =>
                 {
                     b.Property<string>("PolicyKey")

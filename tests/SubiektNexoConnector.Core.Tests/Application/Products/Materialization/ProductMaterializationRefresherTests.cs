@@ -51,6 +51,32 @@ public sealed class ProductMaterializationRefresherTests
     }
 
     [Fact]
+    public async Task RefreshOneAsync_UsesAdvancedFieldDefinitionsFromGroups()
+    {
+        var definition = CreateDefinition();
+        var product = CreateProductDetails(1, "PROD-001") with
+        {
+            AdvancedFields = [new AdditionalFieldValueDto(definition.Id, "value")]
+        };
+        _products.GetDetails(product.SKU).Returns(product);
+        _fieldDefinitions.GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>()).Returns(
+            new AdvancedFieldDefinitionsDto(
+                AdditionalFieldTarget.Product,
+                [new AdvancedFieldGroupDto("Group", 1, [definition])],
+                []));
+        var refresher = CreateRefresher();
+
+        await refresher.RefreshOneAsync(product.SKU);
+
+        await _writer.Received(1).UpsertAsync(
+            product,
+            Arg.Is<IReadOnlyDictionary<string, AdvancedFieldDefinitionDto>>(fields =>
+                fields.Count == 1 && fields[definition.Id] == definition),
+            Arg.Any<DateTime>(),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task RefreshNextBatchAsync_ProcessesOnlyBatchSizeProducts_AndReportsNextPage()
     {
         var first = CreateProductBasic(11, "PROD-011");
@@ -156,18 +182,20 @@ public sealed class ProductMaterializationRefresherTests
     private static AdvancedFieldDefinitionsDto CreateDefinitions() => new(
         AdditionalFieldTarget.Product,
         [],
-        [new AdvancedFieldDefinitionDto(
-            "field-id",
-            "Field",
-            null,
-            AdvancedFieldDataType.Text,
-            false,
-            true,
-            true,
-            true,
-            null,
-            null,
-            null,
-            null,
-            null)]);
+        [CreateDefinition()]);
+
+    private static AdvancedFieldDefinitionDto CreateDefinition() => new(
+        "field-id",
+        "Field",
+        null,
+        AdvancedFieldDataType.Text,
+        false,
+        true,
+        true,
+        true,
+        null,
+        null,
+        null,
+        null,
+        null);
 }

@@ -58,16 +58,15 @@ public class ProductsController : ControllerBase
     [HttpGet("{sku}")]
     [ProducesResponseType(typeof(ProductDetailsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<ProductDetailsDto> GetDetails(
+    public async Task<ActionResult<ProductDetailsDto>> GetDetails(
         string sku,
-        [FromServices] GetProductDetailsHandler handler)
+        [FromServices] GetProductDetailsHandler handler,
+        CancellationToken cancellationToken)
     {
-        var result = handler.Handle(new GetProductDetailsQuery(sku));
-
-        if (result is null)
+        var product = await handler.HandleAsync(new GetProductDetailsQuery(sku), cancellationToken);
+        if (product is null)
             return NotFound();
-
-        return Ok(result);
+        return Ok(product);
     }
 
     [HttpPatch("{sku}")]

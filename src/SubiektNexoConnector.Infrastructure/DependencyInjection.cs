@@ -24,6 +24,7 @@ using SubiektNexoConnector.Core.Materialization;
 using SubiektNexoConnector.Infrastructure.Abstractions;
 using SubiektNexoConnector.Infrastructure.Configuration;
 using SubiektNexoConnector.Infrastructure.Materialization.Persistence;
+using SubiektNexoConnector.Infrastructure.Materialization.Persistence.Policies;
 using SubiektNexoConnector.Infrastructure.Materialization.Persistence.States;
 using SubiektNexoConnector.Infrastructure.Materialization.Products;
 using SubiektNexoConnector.Infrastructure.Nexo;
@@ -80,6 +81,8 @@ public static class DependencyInjection
         services.AddScoped<IProductReadModelReader, ProductReadModelReader>();
         services.AddScoped<IProductMaterializationRefresher, ProductMaterializationRefresher>();
         services.AddScoped<IMaterializationCheckpointStore, MaterializationCheckpointStore>();
+        services.AddScoped<IMaterializationPolicyStore, MaterializationPolicyStore>();
+        services.AddScoped<IProductFreshnessPolicy, ProductFreshnessPolicy>();
 
         services.AddTransient<CreateProductHandler>();
         services.AddTransient<PatchProductHandler>();

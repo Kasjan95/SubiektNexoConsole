@@ -64,17 +64,26 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
         }
 
         [Fact]
-        public void GetDetails_ReturnsOkWithProduct_WhenProductExists()
+        public async Task GetDetails_ReturnsOkWithProduct_WhenProductExists()
         {
-            var repository = Substitute.For<IProductRepository>();
+            var reader = Substitute.For<IProductReadModelReader>();
+            var refresher = Substitute.For<IProductMaterializationRefresher>();
+            var freshnessPolicy = Substitute.For<IProductFreshnessPolicy>();
             var product = ProductDetailsDtoTestData.CreateProductDetailsDto();
+            var refreshedAtUtc = DateTime.UtcNow;
 
-            repository.GetDetails(product.SKU).Returns(product);
+            reader.GetDetailsAsync(product.SKU, Arg.Any<CancellationToken>())
+                .Returns(new MaterializedProductDetails(product, refreshedAtUtc));
+            freshnessPolicy.GetRefreshDueAtUtcAsync(
+                    product,
+                    refreshedAtUtc,
+                    Arg.Any<CancellationToken>())
+                .Returns(DateTime.MaxValue);
 
-            var handler = new GetProductDetailsHandler(repository);
+            var handler = new GetProductDetailsHandler(reader, refresher, freshnessPolicy);
             var controller = new ProductsController();
 
-            var actionResult = controller.GetDetails(product.SKU, handler);
+            var actionResult = await controller.GetDetails(product.SKU, handler, CancellationToken.None);
 
             var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
             var value = Assert.IsType<ProductDetailsDto>(okResult.Value);
@@ -82,17 +91,20 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
         }
 
         [Fact]
-        public void GetDetails_ReturnsNotFound_WhenProductDoesNotExist()
+        public async Task GetDetails_ReturnsNotFound_WhenProductDoesNotExist()
         {
-            var repository = Substitute.For<IProductRepository>();
+            var reader = Substitute.For<IProductReadModelReader>();
+            var refresher = Substitute.For<IProductMaterializationRefresher>();
+            var freshnessPolicy = Substitute.For<IProductFreshnessPolicy>();
             const string productSku = "NON-EXISTENT-SKU";
 
-            repository.GetDetails(productSku).Returns((ProductDetailsDto?)null);
+            reader.GetDetailsAsync(productSku, Arg.Any<CancellationToken>())
+                .Returns((MaterializedProductDetails?)null);
 
-            var handler = new GetProductDetailsHandler(repository);
+            var handler = new GetProductDetailsHandler(reader, refresher, freshnessPolicy);
             var controller = new ProductsController();
 
-            var actionResult = controller.GetDetails(productSku, handler);
+            var actionResult = await controller.GetDetails(productSku, handler, CancellationToken.None);
 
             Assert.IsType<NotFoundResult>(actionResult.Result);
         }

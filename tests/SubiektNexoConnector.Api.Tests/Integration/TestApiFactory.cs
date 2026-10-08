@@ -18,6 +18,7 @@ using SubiektNexoConnector.Core.Application.Parties.Shared;
 using SubiektNexoConnector.Core.Application.Warehouses;
 using Xunit;
 using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
+using SubiektNexoConnector.Core.Application.AdditionalFields.GetAdvancedFieldDefinitions;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 
 [assembly: CollectionBehavior(DisableTestParallelization = true)]
@@ -33,6 +34,13 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
     public IWarehouseRepository Warehouses { get; } = Substitute.For<IWarehouseRepository>();
     public IPartyRepository Parties { get; } = Substitute.For<IPartyRepository>();
     public IAdditionalFieldDefinitionRepository AdditionalFieldDefinitions { get; } = Substitute.For<IAdditionalFieldDefinitionRepository>();
+
+    public TestApiFactory()
+    {
+        AdditionalFieldDefinitions
+            .GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>())
+            .Returns(new AdvancedFieldDefinitionsDto(AdditionalFieldTarget.Product, [], []));
+    }
 
     public HttpClient CreateBusinessClient()
     {

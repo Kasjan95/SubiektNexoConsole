@@ -74,6 +74,31 @@ public sealed class WindowsIntegrationTests
         }
         finally { Directory.Delete(root, true); }
     }
+
+    [WindowsIntegrationFact]
+    public void ProtectedDirectoryGrantsInheritedModifyAccessForSqliteFiles()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "connector-sqlite-acl-test-" + Guid.NewGuid().ToString("N"));
+        var currentSid = WindowsIdentity.GetCurrent().User!;
+        try
+        {
+            ProtectedDirectory.Create(root, currentSid.Value, modify: true);
+            var rules = new DirectoryInfo(root).GetAccessControl()
+                .GetAccessRules(true, true, typeof(SecurityIdentifier))
+                .Cast<FileSystemAccessRule>();
+            var rule = Assert.Single(rules,
+                candidate => candidate.IdentityReference.Value == currentSid.Value);
+
+            Assert.Equal(FileSystemRights.Modify, rule.FileSystemRights & FileSystemRights.Modify);
+            Assert.Equal(
+                InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit,
+                rule.InheritanceFlags);
+        }
+        finally
+        {
+            if (Directory.Exists(root)) Directory.Delete(root, true);
+        }
+    }
     [WindowsIntegrationFact]
     public void ShortcutCanBeRemovedOnlyWhenItsTargetMatches()
     {

@@ -1,5 +1,4 @@
 ﻿using SubiektNexoConnector.Core.Application.Products;
-
 namespace SubiektNexoConnector.Core.Application.Products;
 
 public interface IProductReadModelReader
@@ -8,7 +7,7 @@ public interface IProductReadModelReader
         GetProductsQuery query,
         CancellationToken cancellationToken = default);
 
-    Task<ProductDetailsDto?> GetDetailsAsync(
+    Task<MaterializedProductDetails?> GetDetailsAsync(
         string sku,
         CancellationToken cancellationToken = default);
 }

@@ -78,6 +78,20 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
+    public async Task GetProductDetails_UsesMaterializedProduct_OnSecondRequest()
+    {
+        var productDetails = ProductDetailsDtoTestData.CreateProductDetailsDto("CACHE-PROBE-001");
+        _factory.Products.GetDetails(productDetails.SKU).Returns(productDetails);
+
+        var firstResponse = await _client.GetAsync($"/products/{productDetails.SKU}");
+        var secondResponse = await _client.GetAsync($"/products/{productDetails.SKU}");
+
+        firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        secondResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        _factory.Products.Received(1).GetDetails(productDetails.SKU);
+    }
+
+    [Fact]
     public async Task CreateProduct_Returns201LocationAndJsonBody()
     {
         var request = new CreateProductRequestDto(

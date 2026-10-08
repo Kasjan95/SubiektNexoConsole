@@ -34,7 +34,7 @@ internal sealed class ProductReadModelReader : IProductReadModelReader
                 product.EAN))
             .ToListAsync(cancellationToken);
     }
-    public async Task<ProductDetailsDto?> GetDetailsAsync(string sku,CancellationToken cancellationToken = default)
+    public async Task<MaterializedProductDetails?> GetDetailsAsync(string sku,CancellationToken cancellationToken = default)
     {
         var product = await _dbContext.Products
             .AsNoTracking()
@@ -50,7 +50,7 @@ internal sealed class ProductReadModelReader : IProductReadModelReader
 
         return product is null
             ? null
-            : MapDetails(product);
+            : new MaterializedProductDetails(MapDetails(product), product.RefreshedAtUtc);
     }
 
     private static ProductDetailsDto MapDetails(ProductEntity product)

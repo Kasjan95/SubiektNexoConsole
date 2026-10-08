@@ -85,12 +85,15 @@ public sealed class ProductMaterializationRefresher : IProductMaterializationRef
             candidates.Count <= batchSize);
     }
 
-    private IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> GetAdvancedFieldDefinitions() =>
-        _fieldDefinitions
-            .GetAdvancedFieldDefinitions(
-                new GetAdvancedFieldDefinitionsQuery(AdditionalFieldTarget.Product))
-            .Fields
+    private IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> GetAdvancedFieldDefinitions()
+    {
+        var definitions = _fieldDefinitions.GetAdvancedFieldDefinitions(
+            new GetAdvancedFieldDefinitionsQuery(AdditionalFieldTarget.Product));
+
+        return definitions.Fields
+            .Concat(definitions.Groups.SelectMany(group => group.Fields))
             .ToDictionary(
                 definition => definition.Id,
                 StringComparer.Ordinal);
+    }
 }
