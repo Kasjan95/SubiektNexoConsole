@@ -130,6 +130,43 @@ public sealed class ProductReadModelWriterTests
         Assert.Empty(await context.ProductSuppliers.ToListAsync());
     }
 
+    [Fact]
+    public async Task UpsertBatchAsync_PersistsAllProductsInOneBatch()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        await using var context = CreateContext(connection);
+        await context.Database.EnsureCreatedAsync();
+        var writer = new ProductReadModelWriter(context);
+        var first = CreateProduct(
+            name: "First product",
+            basicFields: [],
+            advancedFields: [],
+            suppliers: [],
+            prices: [new("Retail", 10m, 12.30m)],
+            stocks: [new("MAIN", 5m, 0m)]);
+        var second = first with
+        {
+            Id = 2,
+            SKU = "SKU-2",
+            Name = "Second product"
+        };
+        var refreshedAtUtc = new DateTime(2026, 10, 8, 8, 0, 0, DateTimeKind.Utc);
+
+        await writer.UpsertBatchAsync(
+            [first, second],
+            CreateDefinitions(),
+            refreshedAtUtc);
+
+        Assert.Equal(2, await context.Products.CountAsync());
+        Assert.Equal(2, await context.ProductBasicFields.CountAsync());
+        Assert.Equal(2, await context.ProductPrices.CountAsync());
+        Assert.Equal(2, await context.ProductStocks.CountAsync());
+        Assert.All(
+            await context.Products.AsNoTracking().ToListAsync(),
+            product => Assert.Equal(refreshedAtUtc, product.RefreshedAtUtc));
+    }
+
     private static ReadModelDbContext CreateContext(SqliteConnection connection)
     {
         var options = new DbContextOptionsBuilder<ReadModelDbContext>()

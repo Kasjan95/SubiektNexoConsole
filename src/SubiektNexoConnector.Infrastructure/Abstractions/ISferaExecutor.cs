@@ -11,11 +11,13 @@ public interface ISferaExecutor
 {
     T Execute<T>(
         Func<Uchwyt, T> operation,
+        CancellationToken cancellationToken = default,
         [CallerMemberName] string operationName = "",
         [CallerFilePath] string sourceFilePath = "");
 
     void Execute(
         Action<Uchwyt> operation,
+        CancellationToken cancellationToken = default,
         [CallerMemberName] string operationName = "",
         [CallerFilePath] string sourceFilePath = "");
 }

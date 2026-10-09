@@ -21,7 +21,9 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             _sferaExecutor = sferaExecutor;
         }
 
-        public AdvancedFieldDefinitionsDto GetAdvancedFieldDefinitions(GetAdvancedFieldDefinitionsQuery query)
+        public AdvancedFieldDefinitionsDto GetAdvancedFieldDefinitions(
+            GetAdvancedFieldDefinitionsQuery query,
+            CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(query);
 
@@ -64,7 +66,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 .ToList();
 
                 return new AdvancedFieldDefinitionsDto(query.Target, groups, ungroupedFields);
-            });
+            }, cancellationToken);
         }
 
         public BasicFieldDefinitionsDto GetBasicFieldDefinitions(GetBasicFieldDefinitionsQuery query)

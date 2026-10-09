@@ -1,6 +1,7 @@
 ﻿using SubiektNexoConnector.Core.Application.AdditionalFields.GetAdvancedFieldDefinitions;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
+using SubiektNexoConnector.Core.Materialization;
 
 namespace SubiektNexoConnector.Core.Application.Products;
 
@@ -9,15 +10,21 @@ public sealed class ProductMaterializationRefresher : IProductMaterializationRef
     private readonly IProductRepository _products;
     private readonly IAdditionalFieldDefinitionRepository _fieldDefinitions;
     private readonly IProductReadModelWriter _writer;
+    private readonly IProductMaterializationCandidateStore _candidateStore;
+    private readonly IMaterializationPolicyStore _policyStore;
 
     public ProductMaterializationRefresher(
         IProductRepository products,
         IAdditionalFieldDefinitionRepository fieldDefinitions,
-        IProductReadModelWriter writer)
+        IProductReadModelWriter writer,
+        IProductMaterializationCandidateStore candidateStore,
+        IMaterializationPolicyStore policyStore)
     {
         _products = products;
         _fieldDefinitions = fieldDefinitions;
         _writer = writer;
+        _candidateStore = candidateStore;
+        _policyStore = policyStore;
     }
 
     public async Task RefreshOneAsync(string sku, CancellationToken cancellationToken = default)
@@ -25,7 +32,7 @@ public sealed class ProductMaterializationRefresher : IProductMaterializationRef
         ArgumentException.ThrowIfNullOrWhiteSpace(sku);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var product = _products.GetDetails(sku);
+        var product = _products.GetDetails(sku, cancellationToken);
 
         if (product is null)
         {
@@ -35,7 +42,7 @@ public sealed class ProductMaterializationRefresher : IProductMaterializationRef
 
         cancellationToken.ThrowIfCancellationRequested();
 
-        var definitions = GetAdvancedFieldDefinitions();
+        var definitions = GetAdvancedFieldDefinitions(cancellationToken);
 
         await _writer.UpsertAsync(
             product,
@@ -52,32 +59,19 @@ public sealed class ProductMaterializationRefresher : IProductMaterializationRef
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
         cancellationToken.ThrowIfCancellationRequested();
 
-        var candidates = _products.GetBatchAfterId(afterId, checked(batchSize + 1));
+        var candidates = _products.GetBatchAfterId(
+            afterId,
+            checked(batchSize + 1),
+            cancellationToken);
         cancellationToken.ThrowIfCancellationRequested();
 
         var products = candidates.Take(batchSize).ToArray();
         if (products.Length == 0)
             return new ProductMaterializationBatchResult(0, afterId, true);
 
-        var definitions = GetAdvancedFieldDefinitions();
-
-        foreach (var product in products)
-        {
-            cancellationToken.ThrowIfCancellationRequested();
-            var details = _products.GetDetails(product.SKU);
-
-            if (details is null)
-            {
-                await _writer.DeleteAsync(product.SKU, cancellationToken);
-                continue;
-            }
-
-            await _writer.UpsertAsync(
-                details,
-                definitions,
-                DateTime.UtcNow,
-                cancellationToken);
-        }
+        await RefreshSkusAsync(
+            products.Select(product => product.SKU).ToArray(),
+            cancellationToken);
 
         return new ProductMaterializationBatchResult(
             products.Length,
@@ -85,10 +79,117 @@ public sealed class ProductMaterializationRefresher : IProductMaterializationRef
             candidates.Count <= batchSize);
     }
 
-    private IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> GetAdvancedFieldDefinitions()
+    public async Task<ProductMaterializationBatchResult> RefreshNextBatchAsync(
+        MaterializationPolicyDefinition definition,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(definition);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var policy = await _policyStore.GetOrCreateAsync(definition, cancellationToken);
+
+        return policy.CandidateSelection switch
+        {
+            MaterializationCandidateSelection.ReadModel => await RefreshReadModelBatchAsync(
+                policy,
+                cancellationToken),
+            MaterializationCandidateSelection.MissingFromReadModel => await RefreshMissingBatchAsync(
+                policy,
+                cancellationToken),
+            _ => throw new NotSupportedException(
+                $"Unsupported materialization candidate selection '{policy.CandidateSelection}'.")
+        };
+    }
+
+    private async Task<ProductMaterializationBatchResult> RefreshReadModelBatchAsync(
+        MaterializationPolicy policy,
+        CancellationToken cancellationToken)
+    {
+        var candidates = await _candidateStore.GetDueAsync(
+            policy,
+            DateTime.UtcNow,
+            cancellationToken);
+
+        await RefreshSkusAsync(candidates.Skus, cancellationToken);
+
+        return new ProductMaterializationBatchResult(
+            candidates.Skus.Count,
+            null,
+            !candidates.HasMore);
+    }
+
+    private async Task<ProductMaterializationBatchResult> RefreshMissingBatchAsync(
+        MaterializationPolicy policy,
+        CancellationToken cancellationToken)
+    {
+        var sourceCandidates = _products.GetAllMaterializationCandidates(cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var existingIds = await _candidateStore.GetAllIdsAsync(cancellationToken);
+        var missingSkus = sourceCandidates
+            .Where(product => !existingIds.Contains(product.Id))
+            .Select(product => product.Sku)
+            .ToArray();
+
+        if (missingSkus.Length > 0)
+        {
+            var definitions = GetAdvancedFieldDefinitions(cancellationToken);
+            foreach (var batch in missingSkus.Chunk(policy.BatchSize))
+                await RefreshSkusAsync(batch, definitions, cancellationToken);
+        }
+
+        return new ProductMaterializationBatchResult(
+            missingSkus.Length,
+            null,
+            true);
+    }
+
+    private async Task RefreshSkusAsync(
+        IReadOnlyCollection<string> skus,
+        CancellationToken cancellationToken)
+    {
+        if (skus.Count == 0)
+            return;
+
+        var definitions = GetAdvancedFieldDefinitions(cancellationToken);
+        await RefreshSkusAsync(skus, definitions, cancellationToken);
+    }
+
+    private async Task RefreshSkusAsync(
+        IReadOnlyCollection<string> skus,
+        IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> definitions,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var products = _products.GetDetailsBatch(skus, cancellationToken);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var refreshedAtUtc = DateTime.UtcNow;
+        if (products.Count > 0)
+        {
+            await _writer.UpsertBatchAsync(
+                products,
+                definitions,
+                refreshedAtUtc,
+                cancellationToken);
+        }
+
+        var returnedSkus = products
+            .Select(product => product.SKU)
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var missingSku in skus.Where(sku => !returnedSkus.Contains(sku)))
+            await _writer.DeleteAsync(missingSku, cancellationToken);
+    }
+
+    private IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> GetAdvancedFieldDefinitions(
+        CancellationToken cancellationToken)
     {
         var definitions = _fieldDefinitions.GetAdvancedFieldDefinitions(
-            new GetAdvancedFieldDefinitionsQuery(AdditionalFieldTarget.Product));
+            new GetAdvancedFieldDefinitionsQuery(AdditionalFieldTarget.Product),
+            cancellationToken);
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         return definitions.Fields
             .Concat(definitions.Groups.SelectMany(group => group.Fields))

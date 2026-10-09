@@ -4,6 +4,7 @@ using SubiektNexoConnector.Api.Configuration;
 using SubiektNexoConnector.Api.ErrorHandling;
 using SubiektNexoConnector.Api.Observability;
 using SubiektNexoConnector.Api.Swagger;
+using SubiektNexoConnector.Api.Workers;
 using SubiektNexoConnector.Infrastructure;
 using SubiektNexoConnector.Infrastructure.Idempotency;
 using SubiektNexoConnector.Api.Idempotency;
@@ -85,6 +86,7 @@ try
 
     builder.Services.AddNexoInfrastructure(builder.Configuration, startupOptions.UseLocalNexoConnection);
     builder.Services.AddIdempotencyPersistence(builder.Configuration);
+    builder.Services.AddHostedService<ProductMaterializationWorker>();
 
     var app = builder.Build();
     var configuredDatabasePath = builder.Configuration["Idempotency:DatabasePath"]!;

@@ -52,6 +52,7 @@ public class NexoPartyRepositoryTests
 
         public T Execute<T>(
             Func<Uchwyt, T> operation,
+            CancellationToken cancellationToken = default,
             string operationName = "",
             string sourceFilePath = "")
         {
@@ -61,6 +62,7 @@ public class NexoPartyRepositoryTests
 
         public void Execute(
             Action<Uchwyt> operation,
+            CancellationToken cancellationToken = default,
             string operationName = "",
             string sourceFilePath = "")
         {

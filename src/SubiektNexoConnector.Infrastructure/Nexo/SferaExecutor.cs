@@ -35,21 +35,28 @@ public sealed class SferaExecutor : ISferaExecutor, IDisposable
 
     public T Execute<T>(
         Func<Uchwyt, T> operation,
+        CancellationToken cancellationToken = default,
         [CallerMemberName] string operationName = "",
         [CallerFilePath] string sourceFilePath = "")
     {
         ArgumentNullException.ThrowIfNull(operation);
+        cancellationToken.ThrowIfCancellationRequested();
 
         var operationId = $"{Path.GetFileNameWithoutExtension(sourceFilePath)}.{operationName}";
         var queueDepthAtArrival = Interlocked.Increment(ref _pendingOperations) - 1;
         var queueStopwatch = Stopwatch.StartNew();
         var gateEntered = false;
         var success = false;
-        var executionStopwatch = new Stopwatch();
+        var connectionStopwatch = new Stopwatch();
+        var operationStopwatch = new Stopwatch();
+        var disposeStopwatch = new Stopwatch();
+        Uchwyt? sfera = null;
 
         try
         {
-            gateEntered = _gate.Wait(TimeSpan.FromSeconds(_options.QueueTimeoutSeconds));
+            gateEntered = _gate.Wait(
+                TimeSpan.FromSeconds(_options.QueueTimeoutSeconds),
+                cancellationToken);
             queueStopwatch.Stop();
 
             if (!gateEntered)
@@ -65,8 +72,18 @@ public sealed class SferaExecutor : ISferaExecutor, IDisposable
                     _options.RetryAfterSeconds);
             }
 
-            executionStopwatch.Start();
-            using var sfera = _sessionFactory.Create();
+            cancellationToken.ThrowIfCancellationRequested();
+
+            connectionStopwatch.Start();
+            try
+            {
+                sfera = _sessionFactory.Create();
+            }
+            finally
+            {
+                connectionStopwatch.Stop();
+            }
+
             var execution = _idempotencyAccessor?.Current;
             if (execution?.OperationId is long id && !execution.ExecutionStarted)
             {
@@ -75,32 +92,64 @@ public sealed class SferaExecutor : ISferaExecutor, IDisposable
                     throw new InvalidOperationException("The idempotency operation cannot enter Executing.");
                 execution.MarkExecutionStarted();
             }
-            var result = operation(sfera);
-            success = true;
-            return result;
+
+            operationStopwatch.Start();
+            try
+            {
+                var result = operation(sfera);
+                success = true;
+                return result;
+            }
+            finally
+            {
+                operationStopwatch.Stop();
+            }
         }
         finally
         {
-            executionStopwatch.Stop();
-
-            if (gateEntered)
+            try
             {
-                _gate.Release();
-                _logger.LogInformation(
-                    "Sfera operation {SferaOperation} completed. Queue wait: {QueueWaitMs} ms. Execution: {SferaExecutionMs} ms. Queue depth at arrival: {QueueDepthAtArrival}. Success: {Success}.",
-                    operationId,
-                    queueStopwatch.Elapsed.TotalMilliseconds,
-                    executionStopwatch.Elapsed.TotalMilliseconds,
-                    queueDepthAtArrival,
-                    success);
+                if (sfera is not null)
+                {
+                    disposeStopwatch.Start();
+                    try
+                    {
+                        sfera.Dispose();
+                    }
+                    finally
+                    {
+                        disposeStopwatch.Stop();
+                    }
+                }
             }
+            finally
+            {
+                if (gateEntered)
+                {
+                    _gate.Release();
+                    var totalSferaMs = connectionStopwatch.Elapsed.TotalMilliseconds
+                        + operationStopwatch.Elapsed.TotalMilliseconds
+                        + disposeStopwatch.Elapsed.TotalMilliseconds;
+                    _logger.LogDebug(
+                        "Sfera operation {SferaOperation} completed. Queue wait: {QueueWaitMs} ms. Connection: {SferaConnectionMs} ms. Operation: {SferaOperationMs} ms. Dispose: {SferaDisposeMs} ms. Total: {SferaTotalMs} ms. Queue depth at arrival: {QueueDepthAtArrival}. Success: {Success}.",
+                        operationId,
+                        queueStopwatch.Elapsed.TotalMilliseconds,
+                        connectionStopwatch.Elapsed.TotalMilliseconds,
+                        operationStopwatch.Elapsed.TotalMilliseconds,
+                        disposeStopwatch.Elapsed.TotalMilliseconds,
+                        totalSferaMs,
+                        queueDepthAtArrival,
+                        success);
+                }
 
-            Interlocked.Decrement(ref _pendingOperations);
+                Interlocked.Decrement(ref _pendingOperations);
+            }
         }
     }
 
     public void Execute(
         Action<Uchwyt> operation,
+        CancellationToken cancellationToken = default,
         [CallerMemberName] string operationName = "",
         [CallerFilePath] string sourceFilePath = "")
     {
@@ -109,7 +158,7 @@ public sealed class SferaExecutor : ISferaExecutor, IDisposable
         {
             operation(sfera);
             return true;
-        }, operationName, sourceFilePath);
+        }, cancellationToken, operationName, sourceFilePath);
     }
 
     public void Dispose()

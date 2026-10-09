@@ -51,6 +51,45 @@ public sealed class SferaExecutorTests
         sessionFactory.Received(2).Create();
     }
 
+    [Fact]
+    public async Task Execute_CancelsOperationWaitingForSferaLease()
+    {
+        var sessionFactory = Substitute.For<ISessionFactory>();
+
+        using var executor = new SferaExecutor(
+            sessionFactory,
+            new SferaExecutionOptions(),
+            Substitute.For<ILogger<SferaExecutor>>());
+        var firstOperationEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseFirstOperation = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var first = Task.Run(() => executor.Execute(_ =>
+        {
+            firstOperationEntered.SetResult();
+            releaseFirstOperation.Task.GetAwaiter().GetResult();
+            return true;
+        }));
+
+        await firstOperationEntered.Task;
+        using var cancellation = new CancellationTokenSource();
+        var waiting = Task.Run(() => executor.Execute(_ => true, cancellation.Token));
+
+        try
+        {
+            cancellation.Cancel();
+
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => waiting);
+            Assert.False(first.IsCompleted);
+        }
+        finally
+        {
+            releaseFirstOperation.TrySetResult();
+            await first;
+        }
+
+        sessionFactory.Received(1).Create();
+    }
+
     private static class InterlockedExtensions
     {
         public static void Max(ref int location, int value)

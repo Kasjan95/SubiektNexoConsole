@@ -7,24 +7,30 @@ namespace SubiektNexoConnector.Core.Tests.Application.Products.Materialization;
 public sealed class ProductFreshnessPolicyTests
 {
     [Theory]
-    [InlineData(1, 0, MaterializationPolicyKeys.ProductsHot, 180)]
-    [InlineData(0, 1, MaterializationPolicyKeys.ProductsHot, 180)]
-    [InlineData(0, 0, MaterializationPolicyKeys.ProductsCold, 1800)]
+    [InlineData(1, 0, true)]
+    [InlineData(0, 1, true)]
+    [InlineData(0, 0, false)]
     public async Task GetRefreshDueAtUtcAsync_SelectsPolicyFromTotalStock(
         decimal availableStock,
         decimal reservedStock,
-        string expectedPolicyKey,
-        int expectedDefaultLifetimeSeconds)
+        bool expectedToBeHot)
     {
+        var expectedDefinition = expectedToBeHot
+            ? MaterializationPolicyDefinitions.ProductsHot
+            : MaterializationPolicyDefinitions.ProductsCold;
         var store = Substitute.For<IMaterializationPolicyStore>();
         var configuredLifetime = TimeSpan.FromSeconds(45);
         store.GetOrCreateAsync(
-                expectedPolicyKey,
-                TimeSpan.FromSeconds(expectedDefaultLifetimeSeconds),
+                expectedDefinition,
                 Arg.Any<CancellationToken>())
             .Returns(new MaterializationPolicy(
-                expectedPolicyKey,
+                expectedDefinition.Id,
+                expectedDefinition.Name,
                 configuredLifetime,
+                expectedDefinition.RefreshAhead,
+                expectedDefinition.BatchSize,
+                expectedDefinition.CandidateSelection,
+                expectedDefinition.Requirements,
                 new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
         var policy = new ProductFreshnessPolicy(store);
         var refreshedAtUtc = new DateTime(2026, 10, 8, 8, 0, 0, DateTimeKind.Utc);
@@ -34,8 +40,7 @@ public sealed class ProductFreshnessPolicyTests
 
         Assert.Equal(refreshedAtUtc.Add(configuredLifetime), result);
         await store.Received(1).GetOrCreateAsync(
-            expectedPolicyKey,
-            TimeSpan.FromSeconds(expectedDefaultLifetimeSeconds),
+            expectedDefinition,
             Arg.Any<CancellationToken>());
     }
 

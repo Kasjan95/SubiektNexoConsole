@@ -1,5 +1,8 @@
 using System.Text.Json;
+using System.Diagnostics;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Products;
@@ -10,10 +13,14 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Products;
 internal sealed class ProductReadModelWriter : IProductReadModelWriter
 {
     private readonly ReadModelDbContext _dbContext;
+    private readonly ILogger<ProductReadModelWriter> _logger;
 
-    public ProductReadModelWriter(ReadModelDbContext dbContext)
+    public ProductReadModelWriter(
+        ReadModelDbContext dbContext,
+        ILogger<ProductReadModelWriter>? logger = null)
     {
         _dbContext = dbContext;
+        _logger = logger ?? NullLogger<ProductReadModelWriter>.Instance;
     }
 
     public async Task UpsertAsync(
@@ -24,6 +31,65 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
     {
         ArgumentNullException.ThrowIfNull(product);
         ArgumentNullException.ThrowIfNull(advancedFieldDefinitions);
+
+        await UpsertCoreAsync(
+            product,
+            advancedFieldDefinitions,
+            refreshedAtUtc,
+            cancellationToken);
+
+        await _dbContext.SaveChangesAsync(cancellationToken);
+    }
+
+    public async Task UpsertBatchAsync(
+        IReadOnlyCollection<ProductDetailsDto> products,
+        IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> advancedFieldDefinitions,
+        DateTime refreshedAtUtc,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(products);
+        ArgumentNullException.ThrowIfNull(advancedFieldDefinitions);
+
+        if (products.Count == 0)
+            return;
+
+        var stopwatch = Stopwatch.StartNew();
+
+        try
+        {
+            foreach (var product in products)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                await UpsertCoreAsync(
+                    product,
+                    advancedFieldDefinitions,
+                    refreshedAtUtc,
+                    cancellationToken);
+            }
+
+            await _dbContext.SaveChangesAsync(cancellationToken);
+        }
+        finally
+        {
+            _dbContext.ChangeTracker.Clear();
+        }
+
+        stopwatch.Stop();
+        var productsPerSecond = products.Count / Math.Max(stopwatch.Elapsed.TotalSeconds, 0.001);
+        _logger.LogInformation(
+            "Persisted product materialization batch in SQLite. Products: {ProductCount}; duration: {DurationMs} ms; rate: {ProductsPerSecond} products/s.",
+            products.Count,
+            stopwatch.Elapsed.TotalMilliseconds,
+            productsPerSecond);
+    }
+
+    private async Task UpsertCoreAsync(
+        ProductDetailsDto product,
+        IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> advancedFieldDefinitions,
+        DateTime refreshedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(product);
 
         var entity = await _dbContext.Products.FindAsync([product.Id], cancellationToken);
 
@@ -50,8 +116,6 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
             advancedFieldDefinitions,
             refreshedAtUtc,
             cancellationToken);
-
-        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
     public async Task DeleteAsync(

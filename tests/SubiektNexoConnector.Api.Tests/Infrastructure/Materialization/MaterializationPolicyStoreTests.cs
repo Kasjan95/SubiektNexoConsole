@@ -19,12 +19,18 @@ public sealed class MaterializationPolicyStoreTests
         var beforeCreation = DateTime.UtcNow;
 
         var result = await store.GetOrCreateAsync(
-            MaterializationPolicyKeys.ProductsHot,
-            TimeSpan.FromSeconds(180));
+            MaterializationPolicyDefinitions.ProductsHot);
 
         var afterCreation = DateTime.UtcNow;
-        Assert.Equal(MaterializationPolicyKeys.ProductsHot, result.PolicyKey);
+        Assert.Equal(MaterializationPolicyDefinitions.ProductsHot.Id, result.Id);
+        Assert.Equal(MaterializationPolicyDefinitions.ProductsHot.Name, result.Name);
         Assert.Equal(TimeSpan.FromSeconds(180), result.Lifetime);
+        Assert.Equal(TimeSpan.FromSeconds(15), result.RefreshAhead);
+        Assert.Equal(50, result.BatchSize);
+        Assert.Equal(MaterializationCandidateSelection.ReadModel, result.CandidateSelection);
+        Assert.Equal(
+            MaterializationPolicyDefinitions.ProductsHot.Requirements.ToArray(),
+            result.Requirements.ToArray());
         Assert.InRange(result.UpdatedAtUtc, beforeCreation, afterCreation);
         var entity = await context.MaterializationPolicies.SingleAsync();
         Assert.Equal(180, entity.LifetimeSeconds);
@@ -39,12 +45,13 @@ public sealed class MaterializationPolicyStoreTests
         await context.Database.EnsureCreatedAsync();
         var store = new MaterializationPolicyStore(context);
         var original = await store.GetOrCreateAsync(
-            MaterializationPolicyKeys.ProductsCold,
-            TimeSpan.FromSeconds(1800));
+            MaterializationPolicyDefinitions.ProductsCold);
 
         var result = await store.GetOrCreateAsync(
-            MaterializationPolicyKeys.ProductsCold,
-            TimeSpan.FromSeconds(60));
+            MaterializationPolicyDefinitions.ProductsCold with
+            {
+                LifetimeSeconds = 120
+            });
 
         Assert.Equal(original, result);
         Assert.Equal(TimeSpan.FromSeconds(1800), result.Lifetime);
@@ -62,8 +69,10 @@ public sealed class MaterializationPolicyStoreTests
 
         await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
             store.GetOrCreateAsync(
-                MaterializationPolicyKeys.ProductsHot,
-                TimeSpan.Zero));
+                MaterializationPolicyDefinitions.ProductsHot with
+                {
+                    LifetimeSeconds = 0
+                }));
     }
 
     private static ReadModelDbContext CreateContext(SqliteConnection connection)

@@ -2,7 +2,6 @@
 public interface IMaterializationPolicyStore
 {
     Task<MaterializationPolicy> GetOrCreateAsync(
-        string policyKey,
-        TimeSpan defaultLifetime,
+        MaterializationPolicyDefinition definition,
         CancellationToken cancellationToken = default);
 }

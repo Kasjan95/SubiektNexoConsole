@@ -5,82 +5,79 @@ using InsERT.Moria.Narzedzia.PolaWlasne2;
 using InsERT.Moria.PolaWlasne2;
 using InsERT.Moria.Rozszerzanie;
 using InsERT.Moria.Sfera;
+using Microsoft.Extensions.Logging;
 using SubiektNexoConnector.Core.Application.Common;
 using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Infrastructure.Abstractions;
 using SubiektNexoConnector.Infrastructure.Nexo.Common;
+using System.Diagnostics;
 
 namespace SubiektNexoConnector.Infrastructure.Nexo
 {
     public class NexoProductRepository : IProductRepository
     {
         private readonly ISferaExecutor _sferaExecutor;
-        public NexoProductRepository(ISferaExecutor sferaExecutor)
+        private readonly ILogger<NexoProductRepository> _logger;
+
+        public NexoProductRepository(
+            ISferaExecutor sferaExecutor,
+            ILogger<NexoProductRepository> logger)
         {
             _sferaExecutor = sferaExecutor;
+            _logger = logger;
         }
-        public ProductDetailsDto? GetDetails(string productSymbol)
+
+        public ProductDetailsDto? GetDetails(
+            string productSymbol,
+            CancellationToken cancellationToken = default)
         {
-            return _sferaExecutor.Execute(sfera =>
+            return _sferaExecutor.Execute(
+                sfera => GetDetailsCore(
+                    sfera,
+                    productSymbol,
+                    CreateProductDetailsContext(sfera)),
+                cancellationToken);
+        }
+
+        public IReadOnlyCollection<ProductDetailsDto> GetDetailsBatch(
+            IReadOnlyCollection<string> productSymbols,
+            CancellationToken cancellationToken = default)
+        {
+            ArgumentNullException.ThrowIfNull(productSymbols);
+
+            var symbols = productSymbols
+                .Distinct(StringComparer.Ordinal)
+                .ToArray();
+            if (symbols.Length == 0)
+                return [];
+
+            var stopwatch = Stopwatch.StartNew();
+            var products = _sferaExecutor.Execute(sfera =>
             {
-                IProstePolaWlasne prostePolaWlasne = sfera.PodajObiektTypu<IProstePolaWlasne>();
-                var product = sfera.Asortymenty().Dane.WyszukajPoSymbolu(productSymbol);
-                if (product is null)
-                    return null;
+                var context = CreateProductDetailsContext(sfera);
+                var result = new List<ProductDetailsDto>(symbols.Length);
 
-                var asortymentBo = sfera.Asortymenty().Znajdz(product);
-                if (asortymentBo is null)
-                    return null;
+                foreach (var symbol in symbols)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var product = GetDetailsCore(sfera, symbol, context);
+                    if (product is not null)
+                        result.Add(product);
+                }
 
-                var asoPWAccessor = sfera.UtworzPolaWlasneStdAccessor(asortymentBo.Dane);
-                var advancedFields = sfera.PodajObiektTypu<IZaawansowanePolaWlasne>();
-                var hasAdvancedFields = advancedFields.SprobujPobracZaawansowanePolaWlasne(
-                    typeof(InsERT.Moria.ModelDanych.Asortyment),
-                    out var advancedFieldDefinitions);
-                var asoPW2Accessor = hasAdvancedFields
-                    ? sfera.UtworzPolaWlasneAdv2Accessor(
-                        asortymentBo.Dane,
-                        PolaWlasneAdv2AccessorFactoryNullHandlingKind.CreateReadonlyStub)
-                    : null;
+                return result;
+            }, cancellationToken);
 
-                return new ProductDetailsDto(
-                    product.Id,
-                    product.Symbol,
-                    product.Nazwa,
-                    product.JednostkaMagazynowa?.PodstawowyKodKreskowy?.Kod,
-                    new ProductTypeDto(
-                        product.Rodzaj?.Symbol ?? string.Empty,
-                        product.Rodzaj?.Nazwa ?? string.Empty
-                    ),
-                    !product.IsInRecycleBin,
-                    product.FlagaWlasna is null
-                        ? null
-                        : new FlagAssignmentDto(
-                            product.FlagaWlasna.Id,
-                            product.FlagHeader?.Description),
-                    product.LiczbaDniDoRealizacjiDostawcy,
-                    NexoAdditionalFieldValueMapper.MapBasic(
-                        prostePolaWlasne,
-                        asoPWAccessor,
-                        typeof(InsERT.Moria.ModelDanych.Asortyment)),
-                    asoPW2Accessor is null
-                        ? []
-                        : NexoAdditionalFieldValueMapper.MapAdvanced(
-                            advancedFieldDefinitions,
-                            asoPW2Accessor),
-                    MapDefaultSuppliers(product.DaneAsortymentuDostawcyPodstawowego),
-                    product.PozycjeCennika.Select(c => new ProductPriceDto(
-                        c.Cennik.Tytul,
-                        c.CenaNetto,
-                        c.CenaBrutto
-                    )).ToList(),
-                    product.StanyMagazynowe.Select(s => new ProductStockDto(
-                        s.Magazyn.Symbol,
-                        s.IloscDostepna,
-                        s.IloscZadysponowana
-                    )).ToList()
-                );
-            });
+            stopwatch.Stop();
+            var productsPerSecond = products.Count / Math.Max(stopwatch.Elapsed.TotalSeconds, 0.001);
+            _logger.LogInformation(
+                "Loaded product details batch from Nexo. Requested: {RequestedCount}; returned: {ReturnedCount}; duration: {DurationMs} ms; rate: {ProductsPerSecond} products/s.",
+                symbols.Length,
+                products.Count,
+                stopwatch.Elapsed.TotalMilliseconds,
+                productsPerSecond);
+
+            return products;
         }
         public ProductFromWarehouseDto? GetDetailsFromWarehouse(string warehouseSymbol, string productSymbol)
         {
@@ -156,6 +153,82 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 .ToList();
             });
         }
+
+        private static ProductDetailsMappingContext CreateProductDetailsContext(Uchwyt sfera)
+        {
+            var basicFields = sfera.PodajObiektTypu<IProstePolaWlasne>();
+            var advancedFields = sfera.PodajObiektTypu<IZaawansowanePolaWlasne>();
+            var hasAdvancedFields = advancedFields.SprobujPobracZaawansowanePolaWlasne(
+                typeof(InsERT.Moria.ModelDanych.Asortyment),
+                out var advancedFieldDefinitions);
+
+            return new ProductDetailsMappingContext(
+                basicFields,
+                hasAdvancedFields,
+                hasAdvancedFields
+                    ? advancedFieldDefinitions.ToArray()
+                    : []);
+        }
+
+        private static ProductDetailsDto? GetDetailsCore(
+            Uchwyt sfera,
+            string productSymbol,
+            ProductDetailsMappingContext context)
+        {
+            var product = sfera.Asortymenty().Dane.WyszukajPoSymbolu(productSymbol);
+            if (product is null)
+                return null;
+
+            using var asortymentBo = sfera.Asortymenty().Znajdz(product);
+            if (asortymentBo is null)
+                return null;
+
+            var basicFieldsAccessor = sfera.UtworzPolaWlasneStdAccessor(asortymentBo.Dane);
+            var advancedFieldsAccessor = context.HasAdvancedFields
+                ? sfera.UtworzPolaWlasneAdv2Accessor(
+                    asortymentBo.Dane,
+                    PolaWlasneAdv2AccessorFactoryNullHandlingKind.CreateReadonlyStub)
+                : null;
+
+            return new ProductDetailsDto(
+                product.Id,
+                product.Symbol,
+                product.Nazwa,
+                product.JednostkaMagazynowa?.PodstawowyKodKreskowy?.Kod,
+                new ProductTypeDto(
+                    product.Rodzaj?.Symbol ?? string.Empty,
+                    product.Rodzaj?.Nazwa ?? string.Empty),
+                !product.IsInRecycleBin,
+                product.FlagaWlasna is null
+                    ? null
+                    : new FlagAssignmentDto(
+                        product.FlagaWlasna.Id,
+                        product.FlagHeader?.Description),
+                product.LiczbaDniDoRealizacjiDostawcy,
+                NexoAdditionalFieldValueMapper.MapBasic(
+                    context.BasicFields,
+                    basicFieldsAccessor,
+                    typeof(InsERT.Moria.ModelDanych.Asortyment)),
+                advancedFieldsAccessor is null
+                    ? []
+                    : NexoAdditionalFieldValueMapper.MapAdvanced(
+                        context.AdvancedFieldDefinitions,
+                        advancedFieldsAccessor),
+                MapDefaultSuppliers(product.DaneAsortymentuDostawcyPodstawowego),
+                product.PozycjeCennika.Select(price => new ProductPriceDto(
+                    price.Cennik.Tytul,
+                    price.CenaNetto,
+                    price.CenaBrutto)).ToList(),
+                product.StanyMagazynowe.Select(stock => new ProductStockDto(
+                    stock.Magazyn.Symbol,
+                    stock.IloscDostepna,
+                    stock.IloscZadysponowana)).ToList());
+        }
+
+        private sealed record ProductDetailsMappingContext(
+            IProstePolaWlasne BasicFields,
+            bool HasAdvancedFields,
+            IReadOnlyCollection<IZaawansowanePoleWlasne> AdvancedFieldDefinitions);
 
         private static ProductBasicDto MapBasicProduct(InsERT.Moria.ModelDanych.Asortyment product) => new(
             product.Id,
@@ -281,7 +354,8 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
 
         public IReadOnlyCollection<ProductBasicDto> GetBatchAfterId(
             int? afterId,
-            int batchSize)
+            int batchSize,
+            CancellationToken cancellationToken = default)
         {
             ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
 
@@ -298,7 +372,31 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                     .AsEnumerable()
                     .Select(MapBasicProduct)
                     .ToList();
-            });
+            }, cancellationToken);
+        }
+
+        public IReadOnlyCollection<ProductMaterializationKey> GetAllMaterializationCandidates(
+            CancellationToken cancellationToken = default)
+        {
+            return _sferaExecutor.Execute(sfera =>
+            {
+                var products = sfera.Asortymenty()
+                    .Dane
+                    .Wszystkie()
+                    .OrderBy(product => product.Id)
+                    .Select(product => new
+                    {
+                        product.Id,
+                        product.Symbol
+                    })
+                    .ToList();
+
+                return products
+                    .Select(product => new ProductMaterializationKey(
+                        product.Id,
+                        product.Symbol))
+                    .ToList();
+            }, cancellationToken);
         }
 
         private static void UpdateProductFlag(

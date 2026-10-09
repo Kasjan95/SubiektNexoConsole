@@ -79,6 +79,7 @@ public static class DependencyInjection
         services.AddDbContext<ReadModelDbContext>(options => options.UseSqlite(readModelConnectionString));
         services.AddScoped<IProductReadModelWriter, ProductReadModelWriter>();
         services.AddScoped<IProductReadModelReader, ProductReadModelReader>();
+        services.AddScoped<IProductMaterializationCandidateStore, ProductMaterializationCandidateStore>();
         services.AddScoped<IProductMaterializationRefresher, ProductMaterializationRefresher>();
         services.AddScoped<IMaterializationCheckpointStore, MaterializationCheckpointStore>();
         services.AddScoped<IMaterializationPolicyStore, MaterializationPolicyStore>();

@@ -4,9 +4,6 @@ namespace SubiektNexoConnector.Core.Application.Products;
 
 public sealed class ProductFreshnessPolicy : IProductFreshnessPolicy
 {
-    private static readonly TimeSpan HotDefaultLifetime = TimeSpan.FromSeconds(180);
-    private static readonly TimeSpan ColdDefaultLifetime = TimeSpan.FromSeconds(1800);
-
     private readonly IMaterializationPolicyStore _materializationPolicyStore;
 
     public ProductFreshnessPolicy(IMaterializationPolicyStore materializationPolicyStore)
@@ -20,19 +17,16 @@ public sealed class ProductFreshnessPolicy : IProductFreshnessPolicy
     {
         ArgumentNullException.ThrowIfNull(product);
 
-        var isHot = product.Stocks.Sum(
-            stock => stock.AvailableStock + stock.ReservedStock) > 0;
-
-        var policyKey = isHot
-            ? MaterializationPolicyKeys.ProductsHot
-            : MaterializationPolicyKeys.ProductsCold;
-        var defaultLifetime = isHot
-            ? HotDefaultLifetime
-            : ColdDefaultLifetime;
+        var definition = MaterializationPolicyDefinitions.ProductReadModelPolicies
+            .FirstOrDefault(candidate =>
+                ProductMaterializationRequirementMatcher.Matches(
+                    product,
+                    candidate.Requirements))
+            ?? throw new InvalidOperationException(
+                $"Product '{product.SKU}' does not match any materialization policy.");
 
         var policy = await _materializationPolicyStore.GetOrCreateAsync(
-            policyKey,
-            defaultLifetime,
+            definition,
             cancellationToken);
 
         return refreshedAtUtc.Add(policy.Lifetime);

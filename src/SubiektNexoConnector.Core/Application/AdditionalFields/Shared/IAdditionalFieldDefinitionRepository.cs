@@ -7,7 +7,9 @@ namespace SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 
 public interface IAdditionalFieldDefinitionRepository
 {
-    AdvancedFieldDefinitionsDto GetAdvancedFieldDefinitions(GetAdvancedFieldDefinitionsQuery query);
+    AdvancedFieldDefinitionsDto GetAdvancedFieldDefinitions(
+        GetAdvancedFieldDefinitionsQuery query,
+        CancellationToken cancellationToken = default);
     BasicFieldDefinitionsDto GetBasicFieldDefinitions(GetBasicFieldDefinitionsQuery query);
     FlagDefinitionsDto GetFlagDefinitions(GetFlagDefinitionQuery query);
 }
