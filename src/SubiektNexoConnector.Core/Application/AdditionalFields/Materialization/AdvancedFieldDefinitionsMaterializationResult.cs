@@ -1,0 +1,5 @@
+using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
+
+namespace SubiektNexoConnector.Core.Application.AdditionalFields.Materialization;
+
+public sealed record AdvancedFieldDefinitionsMaterializationResult(AdvancedFieldDefinitionsDto Definitions, bool Refreshed, bool Changed);

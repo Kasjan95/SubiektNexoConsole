@@ -1,0 +1,11 @@
+using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
+
+namespace SubiektNexoConnector.Core.Application.AdditionalFields.Materialization;
+
+public interface IAdvancedFieldDefinitionsMaterializationRefresher
+{
+    Task<AdvancedFieldDefinitionsDto> GetCurrentAsync(AdditionalFieldTarget target, CancellationToken cancellationToken = default);
+    Task<AdvancedFieldDefinitionsMaterializationResult> RefreshIfDueAsync(AdditionalFieldTarget target, CancellationToken cancellationToken = default);
+    Task<AdvancedFieldDefinitionsMaterializationResult> RefreshAsync(AdditionalFieldTarget target, CancellationToken cancellationToken = default);
+}

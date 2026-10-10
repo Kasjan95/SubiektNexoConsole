@@ -15,19 +15,13 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
     private readonly ReadModelDbContext _dbContext;
     private readonly ILogger<ProductReadModelWriter> _logger;
 
-    public ProductReadModelWriter(
-        ReadModelDbContext dbContext,
-        ILogger<ProductReadModelWriter>? logger = null)
+    public ProductReadModelWriter(ReadModelDbContext dbContext, ILogger<ProductReadModelWriter>? logger = null)
     {
         _dbContext = dbContext;
         _logger = logger ?? NullLogger<ProductReadModelWriter>.Instance;
     }
 
-    public async Task UpsertAsync(
-        ProductDetailsDto product,
-        IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> advancedFieldDefinitions,
-        DateTime refreshedAtUtc,
-        CancellationToken cancellationToken = default)
+    public async Task UpsertAsync(ProductDetailsDto product, IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> advancedFieldDefinitions, DateTime refreshedAtUtc, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(product);
         ArgumentNullException.ThrowIfNull(advancedFieldDefinitions);
@@ -41,11 +35,7 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task UpsertBatchAsync(
-        IReadOnlyCollection<ProductDetailsDto> products,
-        IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> advancedFieldDefinitions,
-        DateTime refreshedAtUtc,
-        CancellationToken cancellationToken = default)
+    public async Task UpsertBatchAsync(IReadOnlyCollection<ProductDetailsDto> products, IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> advancedFieldDefinitions, DateTime refreshedAtUtc, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(products);
         ArgumentNullException.ThrowIfNull(advancedFieldDefinitions);
@@ -83,11 +73,7 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
             productsPerSecond);
     }
 
-    private async Task UpsertCoreAsync(
-        ProductDetailsDto product,
-        IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> advancedFieldDefinitions,
-        DateTime refreshedAtUtc,
-        CancellationToken cancellationToken)
+    private async Task UpsertCoreAsync(ProductDetailsDto product, IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> advancedFieldDefinitions, DateTime refreshedAtUtc, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(product);
 
@@ -111,23 +97,15 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
         await SynchronizePricesAsync(product, refreshedAtUtc, cancellationToken);
         await SynchronizeStocksAsync(product, refreshedAtUtc, cancellationToken);
         await SynchronizeSuppliersAsync(product, refreshedAtUtc, cancellationToken);
-        await SynchronizeAdvancedFieldsAsync(
-            product,
-            advancedFieldDefinitions,
-            refreshedAtUtc,
-            cancellationToken);
+        await SynchronizeAdvancedFieldsAsync(product, advancedFieldDefinitions, refreshedAtUtc, cancellationToken);
     }
 
-    public async Task DeleteAsync(
-        string sku,
-        CancellationToken cancellationToken = default)
+    public async Task DeleteAsync(string sku, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(sku);
 
         var product = await _dbContext.Products
-            .SingleOrDefaultAsync(
-                product => product.Sku == sku,
-                cancellationToken);
+            .SingleOrDefaultAsync(product => product.Sku == sku, cancellationToken);
 
         if (product is null)
             return;
@@ -136,10 +114,7 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
         await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    private static void MapProduct(
-        ProductEntity target,
-        ProductDetailsDto source,
-        DateTime refreshedAtUtc)
+    private static void MapProduct(ProductEntity target, ProductDetailsDto source, DateTime refreshedAtUtc)
     {
         target.Sku = source.SKU;
         target.Name = source.Name;
@@ -153,14 +128,9 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
         target.RefreshedAtUtc = refreshedAtUtc;
     }
 
-    private async Task UpsertBasicFieldsAsync(
-        ProductDetailsDto product,
-        DateTime refreshedAtUtc,
-        CancellationToken cancellationToken)
+    private async Task UpsertBasicFieldsAsync(ProductDetailsDto product, DateTime refreshedAtUtc, CancellationToken cancellationToken)
     {
-        var entity = await _dbContext.ProductBasicFields.FindAsync(
-            [product.Id],
-            cancellationToken);
+        var entity = await _dbContext.ProductBasicFields.FindAsync([product.Id], cancellationToken);
 
         if (entity is null)
         {
@@ -180,18 +150,13 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
         entity.RefreshedAtUtc = refreshedAtUtc;
     }
 
-    private async Task SynchronizePricesAsync(
-        ProductDetailsDto product,
-        DateTime refreshedAtUtc,
-        CancellationToken cancellationToken)
+    private async Task SynchronizePricesAsync(ProductDetailsDto product, DateTime refreshedAtUtc, CancellationToken cancellationToken)
     {
         var existing = (await _dbContext.ProductPrices
                 .Where(price => price.ProductId == product.Id)
                 .ToListAsync(cancellationToken))
             .ToDictionary(price => price.PriceLevelName, StringComparer.Ordinal);
-        var current = product.Prices.ToDictionary(
-            price => price.PriceLevelName,
-            StringComparer.Ordinal);
+        var current = product.Prices.ToDictionary(price => price.PriceLevelName, StringComparer.Ordinal);
 
         foreach (var source in current.Values)
         {
@@ -213,18 +178,13 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
         _dbContext.ProductPrices.RemoveRange(existing.Values);
     }
 
-    private async Task SynchronizeStocksAsync(
-        ProductDetailsDto product,
-        DateTime refreshedAtUtc,
-        CancellationToken cancellationToken)
+    private async Task SynchronizeStocksAsync(ProductDetailsDto product, DateTime refreshedAtUtc, CancellationToken cancellationToken)
     {
         var existing = (await _dbContext.ProductStocks
                 .Where(stock => stock.ProductId == product.Id)
                 .ToListAsync(cancellationToken))
             .ToDictionary(stock => stock.WarehouseSymbol, StringComparer.Ordinal);
-        var current = product.Stocks.ToDictionary(
-            stock => stock.WarehouseSymbol,
-            StringComparer.Ordinal);
+        var current = product.Stocks.ToDictionary(stock => stock.WarehouseSymbol, StringComparer.Ordinal);
 
         foreach (var source in current.Values)
         {
@@ -246,10 +206,7 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
         _dbContext.ProductStocks.RemoveRange(existing.Values);
     }
 
-    private async Task SynchronizeSuppliersAsync(
-        ProductDetailsDto product,
-        DateTime refreshedAtUtc,
-        CancellationToken cancellationToken)
+    private async Task SynchronizeSuppliersAsync(ProductDetailsDto product, DateTime refreshedAtUtc, CancellationToken cancellationToken)
     {
         var existing = (await _dbContext.ProductSuppliers
                 .Where(supplier => supplier.ProductId == product.Id)
@@ -281,19 +238,13 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
         _dbContext.ProductSuppliers.RemoveRange(existing.Values);
     }
 
-    private async Task SynchronizeAdvancedFieldsAsync(
-        ProductDetailsDto product,
-        IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> definitions,
-        DateTime refreshedAtUtc,
-        CancellationToken cancellationToken)
+    private async Task SynchronizeAdvancedFieldsAsync(ProductDetailsDto product, IReadOnlyDictionary<string, AdvancedFieldDefinitionDto> definitions, DateTime refreshedAtUtc, CancellationToken cancellationToken)
     {
         var existing = (await _dbContext.ProductAdvancedFields
                 .Where(field => field.ProductId == product.Id)
                 .ToListAsync(cancellationToken))
             .ToDictionary(field => field.FieldId, StringComparer.Ordinal);
-        var current = product.AdvancedFields.ToDictionary(
-            field => field.Id,
-            StringComparer.Ordinal);
+        var current = product.AdvancedFields.ToDictionary(field => field.Id, StringComparer.Ordinal);
 
         foreach (var source in current.Values)
         {
@@ -320,10 +271,7 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
         _dbContext.ProductAdvancedFields.RemoveRange(existing.Values);
     }
 
-    private static void MapAdvancedValue(
-        ProductAdvancedFieldEntity target,
-        AdvancedFieldDefinitionDto definition,
-        object? value)
+    private static void MapAdvancedValue(ProductAdvancedFieldEntity target, AdvancedFieldDefinitionDto definition, object? value)
     {
         target.DataType = definition.DataType;
         target.TextValue = null;
@@ -366,61 +314,42 @@ internal sealed class ProductReadModelWriter : IProductReadModelWriter
         }
     }
 
-    private static void MapDictionaryValue(
-        ProductAdvancedFieldEntity target,
-        AdvancedFieldDefinitionDto definition,
-        object? value)
+    private static void MapDictionaryValue(ProductAdvancedFieldEntity target, AdvancedFieldDefinitionDto definition, object? value)
     {
-        var dictionary = definition.Dictionary
-            ?? throw new InvalidOperationException(
-                $"Advanced field '{definition.Id}' has no dictionary definition.");
-
-        if (dictionary.KeyType.Equals("int", StringComparison.OrdinalIgnoreCase)
-            || dictionary.KeyType.Equals("System.Int32", StringComparison.Ordinal))
+        var dictionary = definition.Dictionary ?? throw new InvalidOperationException($"Advanced field '{definition.Id}' has no dictionary definition.");
+        if (dictionary.KeyType.Equals("int", StringComparison.OrdinalIgnoreCase) || dictionary.KeyType.Equals("System.Int32", StringComparison.Ordinal))
         {
             target.DictionaryIntegerKey = GetStructValue<int>(value, definition.Id);
             return;
         }
-
-        if (dictionary.KeyType.Equals("guid", StringComparison.OrdinalIgnoreCase)
-            || dictionary.KeyType.Equals("System.Guid", StringComparison.Ordinal))
+        if (dictionary.KeyType.Equals("guid", StringComparison.OrdinalIgnoreCase) || dictionary.KeyType.Equals("System.Guid", StringComparison.Ordinal))
         {
             target.DictionaryGuidKey = GetStructValue<Guid>(value, definition.Id);
             return;
         }
-
-        throw new NotSupportedException(
-            $"Unsupported dictionary key type for '{definition.Id}': {dictionary.KeyType}.");
+        throw new NotSupportedException($"Unsupported dictionary key type for '{definition.Id}': {dictionary.KeyType}.");
     }
 
-    private static string? GetBasicValue(
-        IReadOnlyCollection<AdditionalFieldValueDto> fields,
-        string id)
+    private static string? GetBasicValue(IReadOnlyCollection<AdditionalFieldValueDto> fields, string id)
     {
         var field = fields.SingleOrDefault(field => field.Id == id);
         return GetStringValue(field?.Value, id);
     }
 
-    private static byte GetBasicFieldsMask(
-        IReadOnlyCollection<AdditionalFieldValueDto> fields)
+    private static byte GetBasicFieldsMask(IReadOnlyCollection<AdditionalFieldValueDto> fields)
     {
         byte mask = 0;
-
         foreach (var field in fields)
         {
             const string prefix = "PoleWlasne";
 
-            if (!field.Id.StartsWith(prefix, StringComparison.Ordinal)
-                || !int.TryParse(field.Id[prefix.Length..], out var fieldNumber)
-                || fieldNumber is < 1 or > 8)
+            if (!field.Id.StartsWith(prefix, StringComparison.Ordinal) || !int.TryParse(field.Id[prefix.Length..], out var fieldNumber) || fieldNumber is < 1 or > 8)
             {
                 throw new InvalidOperationException(
                     $"Unsupported basic field id: {field.Id}.");
             }
-
             mask |= (byte)(1 << (fieldNumber - 1));
         }
-
         return mask;
     }
 

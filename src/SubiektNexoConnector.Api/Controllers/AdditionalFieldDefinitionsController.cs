@@ -18,14 +18,12 @@ public sealed class AdditionalFieldDefinitionsController : ControllerBase
     [HttpGet("advanced")]
     [ProducesResponseType(typeof(AdvancedFieldDefinitionsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public ActionResult<AdvancedFieldDefinitionsDto> GetAdvancedDefinitions(
-        [FromQuery] AdditionalFieldTarget? target,
-        [FromServices] GetAdvancedFieldDefinitionsHandler handler)
+    public async Task<ActionResult<AdvancedFieldDefinitionsDto>> GetAdvancedDefinitions([FromQuery] AdditionalFieldTarget? target, [FromServices] GetAdvancedFieldDefinitionsHandler handler, CancellationToken cancellationToken)
     {
         if (!IsValidTarget(target))
             return InvalidTarget();
 
-        return Ok(handler.Handle(new GetAdvancedFieldDefinitionsQuery(target.Value)));
+        return Ok(await handler.HandleAsync(new GetAdvancedFieldDefinitionsQuery(target.Value), cancellationToken));
     }
 
     [HttpGet("basic")]

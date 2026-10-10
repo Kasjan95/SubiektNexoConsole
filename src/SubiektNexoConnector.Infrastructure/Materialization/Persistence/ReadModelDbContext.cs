@@ -17,6 +17,10 @@ internal sealed class ReadModelDbContext : DbContext
     public DbSet<ProductAdvancedFieldEntity> ProductAdvancedFields => Set<ProductAdvancedFieldEntity>();
     public DbSet<MaterializationStateEntity> MaterializationStates => Set<MaterializationStateEntity>();
     public DbSet<MaterializationPolicyEntity> MaterializationPolicies => Set<MaterializationPolicyEntity>();
+    public DbSet<AdvancedFieldGroupEntity> AdvancedFieldGroups => Set<AdvancedFieldGroupEntity>();
+    public DbSet<AdvancedFieldDefinitionEntity> AdvancedFieldDefinitions => Set<AdvancedFieldDefinitionEntity>();
+    public DbSet<AdvancedFieldDictionaryOptionEntity> AdvancedFieldDictionaryOptions => Set<AdvancedFieldDictionaryOptionEntity>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfiguration(new ProductEntityConfiguration());
@@ -27,5 +31,9 @@ internal sealed class ReadModelDbContext : DbContext
         modelBuilder.ApplyConfiguration(new ProductAdvancedFieldEntityConfiguration());
         modelBuilder.ApplyConfiguration(new MaterializationStateEntityConfiguration());
         modelBuilder.ApplyConfiguration(new MaterializationPolicyEntityConfiguration());
+
+        modelBuilder.ApplyConfiguration(new AdvancedFieldGroupEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new AdvancedFieldDefinitionEntityConfiguration());
+        modelBuilder.ApplyConfiguration(new AdvancedFieldDictionaryOptionEntityConfiguration());
     }
 }

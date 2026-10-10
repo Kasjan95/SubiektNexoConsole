@@ -1,6 +1,6 @@
 using NSubstitute;
 using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
-using SubiektNexoConnector.Core.Application.AdditionalFields.GetAdvancedFieldDefinitions;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Materialization;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Products;
 using SubiektNexoConnector.Core.Materialization;
@@ -10,7 +10,7 @@ namespace SubiektNexoConnector.Core.Tests.Application.Products.Materialization;
 public sealed class ProductMaterializationRefresherTests
 {
     private readonly IProductRepository _products = Substitute.For<IProductRepository>();
-    private readonly IAdditionalFieldDefinitionRepository _fieldDefinitions = Substitute.For<IAdditionalFieldDefinitionRepository>();
+    private readonly IAdvancedFieldDefinitionsMaterializationRefresher _fieldDefinitions = Substitute.For<IAdvancedFieldDefinitionsMaterializationRefresher>();
     private readonly IProductReadModelWriter _writer = Substitute.For<IProductReadModelWriter>();
     private readonly IProductMaterializationCandidateStore _candidateStore = Substitute.For<IProductMaterializationCandidateStore>();
     private readonly IMaterializationPolicyStore _policyStore = Substitute.For<IMaterializationPolicyStore>();
@@ -21,7 +21,7 @@ public sealed class ProductMaterializationRefresherTests
         var product = CreateProductDetails(1, "PROD-001");
         var definitions = CreateDefinitions();
         _products.GetDetails(product.SKU).Returns(product);
-        _fieldDefinitions.GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>()).Returns(definitions);
+        _fieldDefinitions.GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(definitions);
         var refresher = CreateRefresher();
         var startedAtUtc = DateTime.UtcNow;
 
@@ -34,8 +34,7 @@ public sealed class ProductMaterializationRefresherTests
                 fields.Count == 1 && fields["field-id"] == definitions.Fields.Single()),
             Arg.Is<DateTime>(refreshedAtUtc => refreshedAtUtc >= startedAtUtc && refreshedAtUtc <= finishedAtUtc),
             Arg.Any<CancellationToken>());
-        _fieldDefinitions.Received(1).GetAdvancedFieldDefinitions(
-            Arg.Is<GetAdvancedFieldDefinitionsQuery>(query => query.Target == AdditionalFieldTarget.Product));
+        await _fieldDefinitions.Received(1).GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>());
         await _writer.DidNotReceiveWithAnyArgs().DeleteAsync(default!, default);
     }
 
@@ -49,7 +48,7 @@ public sealed class ProductMaterializationRefresherTests
         await refresher.RefreshOneAsync(sku);
 
         await _writer.Received(1).DeleteAsync(sku, Arg.Any<CancellationToken>());
-        _fieldDefinitions.DidNotReceiveWithAnyArgs().GetAdvancedFieldDefinitions(default!);
+        await _fieldDefinitions.DidNotReceiveWithAnyArgs().GetCurrentAsync(default, default);
         await _writer.DidNotReceiveWithAnyArgs().UpsertAsync(default!, default!, default, default);
     }
 
@@ -62,7 +61,7 @@ public sealed class ProductMaterializationRefresherTests
             AdvancedFields = [new AdditionalFieldValueDto(definition.Id, "value")]
         };
         _products.GetDetails(product.SKU).Returns(product);
-        _fieldDefinitions.GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>()).Returns(
+        _fieldDefinitions.GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(
             new AdvancedFieldDefinitionsDto(
                 AdditionalFieldTarget.Product,
                 [new AdvancedFieldGroupDto("Group", 1, [definition])],
@@ -80,6 +79,23 @@ public sealed class ProductMaterializationRefresherTests
     }
 
     [Fact]
+    public async Task RefreshOneAsync_ForcesDefinitionsRefreshWhenProductContainsUnknownField()
+    {
+        var definition = CreateDefinition();
+        var product = CreateProductDetails(1, "PROD-001") with { AdvancedFields = [new AdditionalFieldValueDto(definition.Id, "value")] };
+        var refreshedDefinitions = new AdvancedFieldDefinitionsDto(AdditionalFieldTarget.Product, [], [definition]);
+        _products.GetDetails(product.SKU).Returns(product);
+        _fieldDefinitions.GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(new AdvancedFieldDefinitionsDto(AdditionalFieldTarget.Product, [], []));
+        _fieldDefinitions.RefreshAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(new AdvancedFieldDefinitionsMaterializationResult(refreshedDefinitions, true, true));
+        var refresher = CreateRefresher();
+
+        await refresher.RefreshOneAsync(product.SKU);
+
+        await _fieldDefinitions.Received(1).RefreshAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>());
+        await _writer.Received(1).UpsertAsync(product, Arg.Is<IReadOnlyDictionary<string, AdvancedFieldDefinitionDto>>(fields => fields.ContainsKey(definition.Id)), Arg.Any<DateTime>(), Arg.Any<CancellationToken>());
+    }
+
+    [Fact]
     public async Task RefreshOneAsync_PropagatesCancellationTokenThroughMaterializationPipeline()
     {
         var product = CreateProductDetails(1, "PROD-001");
@@ -87,18 +103,14 @@ public sealed class ProductMaterializationRefresherTests
         using var cancellation = new CancellationTokenSource();
         var cancellationToken = cancellation.Token;
         _products.GetDetails(product.SKU, cancellationToken).Returns(product);
-        _fieldDefinitions.GetAdvancedFieldDefinitions(
-                Arg.Any<GetAdvancedFieldDefinitionsQuery>(),
-                cancellationToken)
+        _fieldDefinitions.GetCurrentAsync(AdditionalFieldTarget.Product, cancellationToken)
             .Returns(definitions);
         var refresher = CreateRefresher();
 
         await refresher.RefreshOneAsync(product.SKU, cancellationToken);
 
         _products.Received(1).GetDetails(product.SKU, cancellationToken);
-        _fieldDefinitions.Received(1).GetAdvancedFieldDefinitions(
-            Arg.Any<GetAdvancedFieldDefinitionsQuery>(),
-            cancellationToken);
+        await _fieldDefinitions.Received(1).GetCurrentAsync(AdditionalFieldTarget.Product, cancellationToken);
         await _writer.Received(1).UpsertAsync(
             product,
             Arg.Any<IReadOnlyDictionary<string, AdvancedFieldDefinitionDto>>(),
@@ -119,7 +131,7 @@ public sealed class ProductMaterializationRefresherTests
                 Arg.Any<IReadOnlyCollection<string>>(),
                 Arg.Any<CancellationToken>())
             .Returns([firstDetails, secondDetails]);
-        _fieldDefinitions.GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>()).Returns(CreateDefinitions());
+        _fieldDefinitions.GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(CreateDefinitions());
         var refresher = CreateRefresher();
 
         var result = await refresher.RefreshNextBatchAsync(10, 2);
@@ -135,7 +147,7 @@ public sealed class ProductMaterializationRefresherTests
             Arg.Any<IReadOnlyDictionary<string, AdvancedFieldDefinitionDto>>(),
             Arg.Any<DateTime>(),
             Arg.Any<CancellationToken>());
-        _fieldDefinitions.Received(1).GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>());
+        await _fieldDefinitions.Received(1).GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -148,7 +160,7 @@ public sealed class ProductMaterializationRefresherTests
                 Arg.Any<IReadOnlyCollection<string>>(),
                 Arg.Any<CancellationToken>())
             .Returns([details]);
-        _fieldDefinitions.GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>()).Returns(CreateDefinitions());
+        _fieldDefinitions.GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(CreateDefinitions());
         var refresher = CreateRefresher();
 
         var result = await refresher.RefreshNextBatchAsync(20, 3);
@@ -170,7 +182,7 @@ public sealed class ProductMaterializationRefresherTests
                 Arg.Any<IReadOnlyCollection<string>>(),
                 Arg.Any<CancellationToken>())
             .Returns([]);
-        _fieldDefinitions.GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>()).Returns(CreateDefinitions());
+        _fieldDefinitions.GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(CreateDefinitions());
         var refresher = CreateRefresher();
 
         var result = await refresher.RefreshNextBatchAsync(30, 1);
@@ -189,7 +201,7 @@ public sealed class ProductMaterializationRefresherTests
         var result = await refresher.RefreshNextBatchAsync(42, 5);
 
         Assert.Equal(new ProductMaterializationBatchResult(0, 42, true), result);
-        _fieldDefinitions.DidNotReceiveWithAnyArgs().GetAdvancedFieldDefinitions(default!);
+        await _fieldDefinitions.DidNotReceiveWithAnyArgs().GetCurrentAsync(default, default);
         await _writer.DidNotReceiveWithAnyArgs().UpsertAsync(default!, default!, default, default);
         await _writer.DidNotReceiveWithAnyArgs().DeleteAsync(default!, default);
     }
@@ -219,7 +231,7 @@ public sealed class ProductMaterializationRefresherTests
                 Arg.Any<IReadOnlyCollection<string>>(),
                 Arg.Any<CancellationToken>())
             .Returns([product]);
-        _fieldDefinitions.GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>()).Returns(CreateDefinitions());
+        _fieldDefinitions.GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(CreateDefinitions());
         var refresher = CreateRefresher();
 
         var result = await refresher.RefreshNextBatchAsync(definition);
@@ -249,7 +261,7 @@ public sealed class ProductMaterializationRefresherTests
                 Arg.Any<IReadOnlyCollection<string>>(),
                 Arg.Any<CancellationToken>())
             .Returns([missingDetails]);
-        _fieldDefinitions.GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>()).Returns(CreateDefinitions());
+        _fieldDefinitions.GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(CreateDefinitions());
         var refresher = CreateRefresher();
 
         var result = await refresher.RefreshNextBatchAsync(definition);
@@ -291,14 +303,14 @@ public sealed class ProductMaterializationRefresherTests
                 Arg.Is<IReadOnlyCollection<string>>(skus => skus.SequenceEqual(products.Skip(2).Select(product => product.Sku))),
                 Arg.Any<CancellationToken>())
             .Returns(details.Skip(2).ToArray());
-        _fieldDefinitions.GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>()).Returns(CreateDefinitions());
+        _fieldDefinitions.GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(CreateDefinitions());
         var refresher = CreateRefresher();
 
         var result = await refresher.RefreshNextBatchAsync(definition);
 
         Assert.Equal(new ProductMaterializationBatchResult(3, null, true), result);
         _products.Received(1).GetAllMaterializationCandidates();
-        _fieldDefinitions.Received(1).GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>());
+        await _fieldDefinitions.Received(1).GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>());
         _products.Received(2).GetDetailsBatch(
             Arg.Any<IReadOnlyCollection<string>>(),
             Arg.Any<CancellationToken>());

@@ -86,6 +86,7 @@ try
 
     builder.Services.AddNexoInfrastructure(builder.Configuration, startupOptions.UseLocalNexoConnection);
     builder.Services.AddIdempotencyPersistence(builder.Configuration);
+    builder.Services.AddHostedService<AdvancedFieldDefinitionsMaterializationWorker>();
     builder.Services.AddHostedService<ProductMaterializationWorker>();
 
     var app = builder.Build();

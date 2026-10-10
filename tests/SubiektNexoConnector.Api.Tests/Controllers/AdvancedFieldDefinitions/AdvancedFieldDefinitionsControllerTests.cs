@@ -6,6 +6,7 @@ using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefini
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetAdvancedFieldDefinitions;
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetBasicFieldDefinitions;
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetFlagDefinitions;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Materialization;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Common;
 
@@ -14,20 +15,17 @@ namespace SubiektNexoConnector.Api.Tests.Controllers;
 public sealed class AdditionalFieldDefinitionsControllerTests
 {
     [Fact]
-    public void GetAdvancedDefinitions_ReturnsDefinitionsForTarget()
+    public async Task GetAdvancedDefinitions_ReturnsDefinitionsForTarget()
     {
-        var repository = Substitute.For<IAdditionalFieldDefinitionRepository>();
+        var materialization = Substitute.For<IAdvancedFieldDefinitionsMaterializationRefresher>();
         var expected = new AdvancedFieldDefinitionsDto(
             AdditionalFieldTarget.Product,
             Array.Empty<AdvancedFieldGroupDto>(),
             [new("field-id", "Color", null, AdvancedFieldDataType.Text, false,
                 true, true, true, null, null, null, null, null)]);
-        repository.GetAdvancedFieldDefinitions(
-            new GetAdvancedFieldDefinitionsQuery(AdditionalFieldTarget.Product)).Returns(expected);
+        materialization.GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(expected);
 
-        var result = new AdditionalFieldDefinitionsController().GetAdvancedDefinitions(
-            AdditionalFieldTarget.Product,
-            new GetAdvancedFieldDefinitionsHandler(repository));
+        var result = await new AdditionalFieldDefinitionsController().GetAdvancedDefinitions(AdditionalFieldTarget.Product, new GetAdvancedFieldDefinitionsHandler(materialization), CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         Assert.Equal(expected, Assert.IsType<AdvancedFieldDefinitionsDto>(ok.Value));
@@ -52,14 +50,15 @@ public sealed class AdditionalFieldDefinitionsControllerTests
     }
 
     [Fact]
-    public void GetDefinitions_ReturnsBadRequest_WhenTargetIsMissingOrUnsupported()
+    public async Task GetDefinitions_ReturnsBadRequest_WhenTargetIsMissingOrUnsupported()
     {
         var repository = Substitute.For<IAdditionalFieldDefinitionRepository>();
+        var materialization = Substitute.For<IAdvancedFieldDefinitionsMaterializationRefresher>();
         var controller = new AdditionalFieldDefinitionsController();
-        var advancedHandler = new GetAdvancedFieldDefinitionsHandler(repository);
+        var advancedHandler = new GetAdvancedFieldDefinitionsHandler(materialization);
         var basicHandler = new GetBasicFieldDefinitionsHandler(repository);
 
-        Assert.IsType<BadRequestObjectResult>(controller.GetAdvancedDefinitions(null, advancedHandler).Result);
+        Assert.IsType<BadRequestObjectResult>((await controller.GetAdvancedDefinitions(null, advancedHandler, CancellationToken.None)).Result);
         Assert.IsType<BadRequestObjectResult>(controller.GetBasicDefinitions((AdditionalFieldTarget)99, basicHandler).Result);
     }
 

@@ -53,7 +53,7 @@ public sealed class MaterializationPolicyStoreTests
                 LifetimeSeconds = 120
             });
 
-        Assert.Equal(original, result);
+        Assert.Equivalent(original, result, strict: true);
         Assert.Equal(TimeSpan.FromSeconds(1800), result.Lifetime);
         Assert.Equal(1, await context.MaterializationPolicies.CountAsync());
     }

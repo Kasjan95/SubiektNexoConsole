@@ -56,7 +56,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
     [Fact]
     public async Task GetProductDetails_Returns404_WhenWrongSku()
     {
-        _factory.Products.GetDetails("non-existing").Returns((ProductDetailsDto?)null);
+        _factory.Products.GetDetails("non-existing", Arg.Any<CancellationToken>()).Returns((ProductDetailsDto?)null);
 
         var response = await _client.GetAsync("/products/non-existing");
 
@@ -68,7 +68,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
     {
         var productDetails = ProductDetailsDtoTestData.CreateProductDetailsDto(
             flag: new FlagAssignmentDto(12, "Nie sprzedawać bez potwierdzenia wymiaru"));
-        _factory.Products.GetDetails(productDetails.SKU).Returns(productDetails);
+        _factory.Products.GetDetails(productDetails.SKU, Arg.Any<CancellationToken>()).Returns(productDetails);
 
         var response = await _client.GetAsync($"/products/{productDetails.SKU}");
 
@@ -81,14 +81,14 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
     public async Task GetProductDetails_UsesMaterializedProduct_OnSecondRequest()
     {
         var productDetails = ProductDetailsDtoTestData.CreateProductDetailsDto("CACHE-PROBE-001");
-        _factory.Products.GetDetails(productDetails.SKU).Returns(productDetails);
+        _factory.Products.GetDetails(productDetails.SKU, Arg.Any<CancellationToken>()).Returns(productDetails);
 
         var firstResponse = await _client.GetAsync($"/products/{productDetails.SKU}");
         var secondResponse = await _client.GetAsync($"/products/{productDetails.SKU}");
 
         firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         secondResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-        _factory.Products.Received(1).GetDetails(productDetails.SKU);
+        _factory.Products.Received(1).GetDetails(productDetails.SKU, Arg.Any<CancellationToken>());
     }
 
     [Fact]

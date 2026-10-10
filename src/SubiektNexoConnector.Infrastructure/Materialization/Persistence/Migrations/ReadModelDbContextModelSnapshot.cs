@@ -17,6 +17,131 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.25");
 
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.AdvancedFieldDefinitionEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Cloneable")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DataType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DefaultValueJson")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DictionaryKeyType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DictionaryKind")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("DictionaryOptionsAvailable")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Editable")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FieldId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("GroupId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("MaxVisibleLines")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("MinVisibleLines")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("Precision")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Required")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SystemDictionary")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Visible")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GroupId");
+
+                    b.HasIndex("Target", "FieldId")
+                        .IsUnique();
+
+                    b.ToTable("AdvancedFieldDefinitions", (string)null);
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.AdvancedFieldDictionaryOptionEntity", b =>
+                {
+                    b.Property<long>("DefinitionId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Key")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool?>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Label")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("DefinitionId", "Key");
+
+                    b.ToTable("AdvancedFieldDictionaryOptions", (string)null);
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.AdvancedFieldGroupEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Target")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Target", "Name", "Position")
+                        .IsUnique();
+
+                    b.ToTable("AdvancedFieldGroups", (string)null);
+                });
+
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.MaterializationPolicyEntity", b =>
                 {
                     b.Property<string>("PolicyKey")
@@ -276,6 +401,25 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
                     b.ToTable("ProductSuppliers", (string)null);
                 });
 
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.AdvancedFieldDefinitionEntity", b =>
+                {
+                    b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.AdvancedFieldGroupEntity", "Group")
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Group");
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.AdvancedFieldDictionaryOptionEntity", b =>
+                {
+                    b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.AdvancedFieldDefinitionEntity", null)
+                        .WithMany("DictionaryOptions")
+                        .HasForeignKey("DefinitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductAdvancedFieldEntity", b =>
                 {
                     b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductEntity", null)
@@ -319,6 +463,11 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
                         .HasForeignKey("ProductId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.AdvancedFieldDefinitionEntity", b =>
+                {
+                    b.Navigation("DictionaryOptions");
                 });
 
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductEntity", b =>

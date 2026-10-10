@@ -1,21 +1,20 @@
 using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
-using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Materialization;
 
 namespace SubiektNexoConnector.Core.Application.AdditionalFields.GetAdvancedFieldDefinitions;
 
 public sealed class GetAdvancedFieldDefinitionsHandler
 {
-    private readonly IAdditionalFieldDefinitionRepository _repository;
+    private readonly IAdvancedFieldDefinitionsMaterializationRefresher _materialization;
 
-    public GetAdvancedFieldDefinitionsHandler(IAdditionalFieldDefinitionRepository repository)
+    public GetAdvancedFieldDefinitionsHandler(IAdvancedFieldDefinitionsMaterializationRefresher materialization)
     {
-        _repository = repository;
+        _materialization = materialization;
     }
 
-    public AdvancedFieldDefinitionsDto Handle(GetAdvancedFieldDefinitionsQuery query)
+    public Task<AdvancedFieldDefinitionsDto> HandleAsync(GetAdvancedFieldDefinitionsQuery query, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(query);
-
-        return _repository.GetAdvancedFieldDefinitions(query);
+        return _materialization.GetCurrentAsync(query.Target, cancellationToken);
     }
 }

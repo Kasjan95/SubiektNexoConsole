@@ -33,7 +33,7 @@ public sealed class AdditionalFieldDefinitionsHttpTests : IClassFixture<TestApiF
             [new("ungrouped-field", "Quantity", null, AdvancedFieldDataType.Integer,
                 false, true, true, true, 0, null, null, null, null)]);
         _factory.AdditionalFieldDefinitions
-            .GetAdvancedFieldDefinitions(new GetAdvancedFieldDefinitionsQuery(AdditionalFieldTarget.Product))
+            .GetAdvancedFieldDefinitions(new GetAdvancedFieldDefinitionsQuery(AdditionalFieldTarget.Product), Arg.Any<CancellationToken>())
             .Returns(definitions);
 
         var response = await _client.GetAsync("/additional-field-definitions/advanced?target=product");

@@ -1,6 +1,7 @@
 using NSubstitute;
 using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetAdvancedFieldDefinitions;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Materialization;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 
 namespace SubiektNexoConnector.Core.Tests.Application.AdvancedFieldDefinitions;
@@ -8,28 +9,24 @@ namespace SubiektNexoConnector.Core.Tests.Application.AdvancedFieldDefinitions;
 public sealed class GetAdvancedFieldDefinitionsHandlerTests
 {
     [Fact]
-    public void Handle_ReturnsDefinitionsFromRepository()
+    public async Task HandleAsync_ReturnsDefinitionsFromMaterialization()
     {
-        var repository = Substitute.For<IAdditionalFieldDefinitionRepository>();
+        var materialization = Substitute.For<IAdvancedFieldDefinitionsMaterializationRefresher>();
         var query = new GetAdvancedFieldDefinitionsQuery(AdditionalFieldTarget.Product);
-        var expected = new AdvancedFieldDefinitionsDto(
-            AdditionalFieldTarget.Product,
-            Array.Empty<AdvancedFieldGroupDto>(),
-            [new("field-id", "Color", "Display color", AdvancedFieldDataType.Text, false,
-                true, true, true, null, null, null, null, null)]);
-        repository.GetAdvancedFieldDefinitions(query).Returns(expected);
+        var expected = new AdvancedFieldDefinitionsDto(AdditionalFieldTarget.Product, [], [new("field-id", "Color", "Display color", AdvancedFieldDataType.Text, false, true, true, true, null, null, null, null, null)]);
+        materialization.GetCurrentAsync(query.Target, Arg.Any<CancellationToken>()).Returns(expected);
 
-        var result = new GetAdvancedFieldDefinitionsHandler(repository).Handle(query);
+        var result = await new GetAdvancedFieldDefinitionsHandler(materialization).HandleAsync(query);
 
         Assert.Equal(expected, result);
-        repository.Received(1).GetAdvancedFieldDefinitions(query);
+        await materialization.Received(1).GetCurrentAsync(query.Target, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public void Handle_ThrowsArgumentNullException_WhenQueryIsNull()
+    public async Task HandleAsync_ThrowsArgumentNullException_WhenQueryIsNull()
     {
-        var repository = Substitute.For<IAdditionalFieldDefinitionRepository>();
+        var materialization = Substitute.For<IAdvancedFieldDefinitionsMaterializationRefresher>();
 
-        Assert.Throws<ArgumentNullException>(() => new GetAdvancedFieldDefinitionsHandler(repository).Handle(null!));
+        await Assert.ThrowsAsync<ArgumentNullException>(() => new GetAdvancedFieldDefinitionsHandler(materialization).HandleAsync(null!));
     }
 }

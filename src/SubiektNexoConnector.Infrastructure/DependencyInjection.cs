@@ -6,6 +6,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetAdvancedFieldDefinitions;
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetBasicFieldDefinitions;
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetFlagDefinitions;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Materialization;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
@@ -26,6 +27,7 @@ using SubiektNexoConnector.Infrastructure.Configuration;
 using SubiektNexoConnector.Infrastructure.Materialization.Persistence;
 using SubiektNexoConnector.Infrastructure.Materialization.Persistence.Policies;
 using SubiektNexoConnector.Infrastructure.Materialization.Persistence.States;
+using SubiektNexoConnector.Infrastructure.Materialization.AdditionalFields;
 using SubiektNexoConnector.Infrastructure.Materialization.Products;
 using SubiektNexoConnector.Infrastructure.Nexo;
 
@@ -79,6 +81,9 @@ public static class DependencyInjection
         services.AddDbContext<ReadModelDbContext>(options => options.UseSqlite(readModelConnectionString));
         services.AddScoped<IProductReadModelWriter, ProductReadModelWriter>();
         services.AddScoped<IProductReadModelReader, ProductReadModelReader>();
+        services.AddScoped<IAdvancedFieldDefinitionsReadModelReader, AdvancedFieldDefinitionsReadModelReader>();
+        services.AddScoped<IAdvancedFieldDefinitionsReadModelWriter, AdvancedFieldDefinitionsReadModelWriter>();
+        services.AddScoped<IAdvancedFieldDefinitionsMaterializationRefresher, AdvancedFieldDefinitionsMaterializationRefresher>();
         services.AddScoped<IProductMaterializationCandidateStore, ProductMaterializationCandidateStore>();
         services.AddScoped<IProductMaterializationRefresher, ProductMaterializationRefresher>();
         services.AddScoped<IMaterializationCheckpointStore, MaterializationCheckpointStore>();

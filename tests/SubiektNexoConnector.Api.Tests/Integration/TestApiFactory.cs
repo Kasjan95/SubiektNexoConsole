@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using NSubstitute;
 using SubiektNexoConnector.Infrastructure.Idempotency;
 using SubiektNexoConnector.Infrastructure.Idempotency.Persistence;
@@ -38,8 +39,8 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
     public TestApiFactory()
     {
         AdditionalFieldDefinitions
-            .GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>())
-            .Returns(new AdvancedFieldDefinitionsDto(AdditionalFieldTarget.Product, [], []));
+            .GetAdvancedFieldDefinitions(Arg.Any<GetAdvancedFieldDefinitionsQuery>(), Arg.Any<CancellationToken>())
+            .Returns(callInfo => new AdvancedFieldDefinitionsDto(callInfo.Arg<GetAdvancedFieldDefinitionsQuery>().Target, [], []));
     }
 
     public HttpClient CreateBusinessClient()
@@ -81,6 +82,7 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
 
         builder.ConfigureTestServices(services =>
         {
+            services.RemoveAll<IHostedService>();
             services.RemoveAll<ApiAuthenticationOptions>();
             services.RemoveAll<IProductRepository>();
             services.RemoveAll<IWarehouseRepository>();

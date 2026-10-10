@@ -1,3 +1,5 @@
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
+
 namespace SubiektNexoConnector.Core.Materialization;
 
 public static class MaterializationPolicyDefinitions
@@ -42,9 +44,48 @@ public static class MaterializationPolicyDefinitions
         MaterializationCandidateSelection.MissingFromReadModel,
         []);
 
+    public static readonly MaterializationPolicyDefinition AdvancedFieldDefinitionsProduct = new(
+        "additional-field-definitions.advanced.product",
+        "Product advanced field definitions",
+        400,
+        2700,
+        120,
+        1,
+        MaterializationCandidateSelection.ReadModel,
+        []);
+
+    public static readonly MaterializationPolicyDefinition AdvancedFieldDefinitionsParty = new(
+        "additional-field-definitions.advanced.party",
+        "Party advanced field definitions",
+        390,
+        2700,
+        120,
+        1,
+        MaterializationCandidateSelection.ReadModel,
+        []);
+
     public static IReadOnlyCollection<MaterializationPolicyDefinition> ProductReadModelPolicies { get; } =
         [ProductsHot, ProductsCold];
 
     public static IReadOnlyCollection<MaterializationPolicyDefinition> ProductWorkerPolicies { get; } =
         [ProductsNew, ProductsHot, ProductsCold];
+
+    public static IReadOnlyCollection<MaterializationPolicyDefinition> AdvancedFieldDefinitionsWorkerPolicies { get; } =
+        [AdvancedFieldDefinitionsProduct, AdvancedFieldDefinitionsParty];
+
+    public static MaterializationPolicyDefinition GetAdvancedFieldDefinitionsPolicy(AdditionalFieldTarget target) => target switch
+    {
+        AdditionalFieldTarget.Product => AdvancedFieldDefinitionsProduct,
+        AdditionalFieldTarget.Party => AdvancedFieldDefinitionsParty,
+        _ => throw new ArgumentOutOfRangeException(nameof(target), target, "Unsupported advanced field target.")
+    };
+
+    public static AdditionalFieldTarget GetAdvancedFieldDefinitionsTarget(string policyId)
+    {
+        if (policyId == AdvancedFieldDefinitionsProduct.Id)
+            return AdditionalFieldTarget.Product;
+        if (policyId == AdvancedFieldDefinitionsParty.Id)
+            return AdditionalFieldTarget.Party;
+        throw new ArgumentOutOfRangeException(nameof(policyId), policyId, "Unknown advanced field definitions policy.");
+    }
 }
