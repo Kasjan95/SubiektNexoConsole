@@ -10,6 +10,7 @@ using SubiektNexoConnector.Core.Application.AdditionalFields.GetBasicFieldDefini
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetFlagDefinitions;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Common;
+using SubiektNexoConnector.Api.Materialization;
 
 namespace SubiektNexoConnector.Api.Tests.Integration;
 
@@ -39,6 +40,9 @@ public sealed class AdditionalFieldDefinitionsHttpTests : IClassFixture<TestApiF
         var response = await _client.GetAsync("/additional-field-definitions/advanced?target=product");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.Headers.GetValues(MaterializationMetadataMiddleware.StatusHeaderName).Single().Should().Be("fresh");
+        long.Parse(response.Headers.GetValues(MaterializationMetadataMiddleware.AgeSecondsHeaderName).Single()).Should().BeInRange(0, 60);
+        response.Headers.Contains(MaterializationMetadataMiddleware.LastSuccessAtHeaderName).Should().BeTrue();
         var serializerOptions = new JsonSerializerOptions(JsonSerializerDefaults.Web)
         {
             Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase) }

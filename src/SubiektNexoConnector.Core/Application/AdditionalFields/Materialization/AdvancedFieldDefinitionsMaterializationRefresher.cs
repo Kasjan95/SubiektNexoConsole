@@ -48,6 +48,16 @@ public sealed class AdvancedFieldDefinitionsMaterializationRefresher : IAdvanced
         }
     }
 
+    public async Task<MaterializedResult<AdvancedFieldDefinitionsDto>> GetCurrentWithMetadataAsync(AdditionalFieldTarget target, CancellationToken cancellationToken = default)
+    {
+        var definitions = await GetCurrentAsync(target, cancellationToken);
+        var definition = MaterializationPolicyDefinitions.GetAdvancedFieldDefinitionsPolicy(target);
+        var policy = await _policyStore.GetOrCreateAsync(definition, cancellationToken);
+        var checkpoint = await _checkpointStore.GetOrCreateAsync(definition.Id, cancellationToken);
+        var metadata = MaterializationMetadata.Evaluate(checkpoint.LastCycleCompletedAtUtc, policy.Lifetime, policy.RefreshAhead, DateTime.UtcNow);
+        return new MaterializedResult<AdvancedFieldDefinitionsDto>(definitions, metadata);
+    }
+
     public Task<AdvancedFieldDefinitionsMaterializationResult> RefreshIfDueAsync(AdditionalFieldTarget target, CancellationToken cancellationToken = default) => RefreshCoreAsync(target, force: false, useRefreshAhead: true, cancellationToken);
 
     public Task<AdvancedFieldDefinitionsMaterializationResult> RefreshAsync(AdditionalFieldTarget target, CancellationToken cancellationToken = default) => RefreshCoreAsync(target, force: true, useRefreshAhead: false, cancellationToken);

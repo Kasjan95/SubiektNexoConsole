@@ -1,6 +1,7 @@
 using System.Net.Mime;
 using Microsoft.AspNetCore.Mvc;
 using SubiektNexoConnector.Api.Configuration;
+using SubiektNexoConnector.Api.Materialization;
 using SubiektNexoConnector.Core.Application.Products;
 
 namespace SubiektNexoConnector.Api.Controllers;
@@ -63,10 +64,11 @@ public class ProductsController : ControllerBase
         [FromServices] GetProductDetailsHandler handler,
         CancellationToken cancellationToken)
     {
-        var product = await handler.HandleAsync(new GetProductDetailsQuery(sku), cancellationToken);
-        if (product is null)
+        var result = await handler.HandleAsync(new GetProductDetailsQuery(sku), cancellationToken);
+        HttpContext.SetMaterializationMetadata(result.Metadata);
+        if (result.Value is null)
             return NotFound();
-        return Ok(product);
+        return Ok(result.Value);
     }
 
     [HttpPatch("{sku}")]

@@ -8,6 +8,7 @@ using System.Net;
 using Microsoft.AspNetCore.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
+using SubiektNexoConnector.Api.Materialization;
 
 namespace SubiektNexoConnector.Api.Tests.Integration;
 
@@ -48,6 +49,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
         var response = await _client.GetAsync("/products?pageSize=1001");
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
+        response.Headers.Contains(MaterializationMetadataMiddleware.StatusHeaderName).Should().BeFalse();
         var body = await response.Content.ReadFromJsonAsync<ValidationProblemDetails>();
         body!.Errors.Should().ContainKey("pageSize");
         _factory.Products.DidNotReceive().GetAll(Arg.Any<GetProductsQuery>());
@@ -61,6 +63,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
         var response = await _client.GetAsync("/products/non-existing");
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        AssertFreshMaterializationHeaders(response);
     }
 
     [Fact]
@@ -73,6 +76,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
         var response = await _client.GetAsync($"/products/{productDetails.SKU}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+        AssertFreshMaterializationHeaders(response);
         var body = await response.Content.ReadFromJsonAsync<ProductDetailsDto>();
         body.Should().BeEquivalentTo(productDetails);
     }
@@ -88,6 +92,8 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
 
         firstResponse.StatusCode.Should().Be(HttpStatusCode.OK);
         secondResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        AssertFreshMaterializationHeaders(firstResponse);
+        AssertFreshMaterializationHeaders(secondResponse);
         _factory.Products.Received(1).GetDetails(productDetails.SKU, Arg.Any<CancellationToken>());
     }
 
@@ -325,6 +331,13 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
             && advancedField.Id == "weight"
             && advancedField.Value is JsonElement { ValueKind: JsonValueKind.Number } advancedValue
             && advancedValue.GetDecimal() == 42.5m;
+    }
+
+    private static void AssertFreshMaterializationHeaders(HttpResponseMessage response)
+    {
+        response.Headers.GetValues(MaterializationMetadataMiddleware.StatusHeaderName).Single().Should().Be("fresh");
+        long.Parse(response.Headers.GetValues(MaterializationMetadataMiddleware.AgeSecondsHeaderName).Single()).Should().BeInRange(0, 60);
+        DateTime.Parse(response.Headers.GetValues(MaterializationMetadataMiddleware.LastSuccessAtHeaderName).Single(), null, System.Globalization.DateTimeStyles.RoundtripKind).Kind.Should().Be(DateTimeKind.Utc);
     }
 
     [Fact]

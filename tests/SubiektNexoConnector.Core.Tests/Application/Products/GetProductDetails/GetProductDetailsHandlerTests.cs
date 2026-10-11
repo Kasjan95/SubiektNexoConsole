@@ -1,5 +1,6 @@
 using NSubstitute;
 using SubiektNexoConnector.Core.Application.Products;
+using SubiektNexoConnector.Core.Materialization;
 
 namespace SubiektNexoConnector.Core.Tests.Application.Products;
 
@@ -15,16 +16,17 @@ public sealed class GetProductDetailsHandlerTests
         var refreshedAtUtc = new DateTime(2026, 10, 8, 8, 0, 0, DateTimeKind.Utc);
         reader.GetDetailsAsync(expectedProduct.SKU, Arg.Any<CancellationToken>())
             .Returns(new MaterializedProductDetails(expectedProduct, refreshedAtUtc));
-        freshnessPolicy.GetRefreshDueAtUtcAsync(
+        freshnessPolicy.GetMetadataAsync(
                 expectedProduct,
                 refreshedAtUtc,
                 Arg.Any<CancellationToken>())
-            .Returns(DateTime.MaxValue);
+            .Returns(new MaterializationMetadata(MaterializationStatus.Fresh, refreshedAtUtc));
         var handler = new GetProductDetailsHandler(reader, refresher, freshnessPolicy);
 
         var result = await handler.HandleAsync(new GetProductDetailsQuery(expectedProduct.SKU));
 
-        Assert.Equal(expectedProduct, result);
+        Assert.Equal(expectedProduct, result.Value);
+        Assert.Equal(MaterializationStatus.Fresh, result.Metadata.Status);
         await reader.Received(1).GetDetailsAsync(expectedProduct.SKU, Arg.Any<CancellationToken>());
         await refresher.DidNotReceiveWithAnyArgs().RefreshOneAsync(default!, default);
     }
@@ -40,16 +42,17 @@ public sealed class GetProductDetailsHandlerTests
         var refreshedProduct = new MaterializedProductDetails(expectedProduct, DateTime.UtcNow);
         reader.GetDetailsAsync(expectedProduct.SKU, Arg.Any<CancellationToken>())
             .Returns(new MaterializedProductDetails(expectedProduct, staleRefresh), refreshedProduct);
-        freshnessPolicy.GetRefreshDueAtUtcAsync(
+        freshnessPolicy.GetMetadataAsync(
                 expectedProduct,
                 staleRefresh,
                 Arg.Any<CancellationToken>())
-            .Returns(DateTime.MinValue);
+            .Returns(new MaterializationMetadata(MaterializationStatus.Stale, staleRefresh));
         var handler = new GetProductDetailsHandler(reader, refresher, freshnessPolicy);
 
         var result = await handler.HandleAsync(new GetProductDetailsQuery(expectedProduct.SKU));
 
-        Assert.Equal(expectedProduct, result);
+        Assert.Equal(expectedProduct, result.Value);
+        Assert.Equal(MaterializationStatus.Fresh, result.Metadata.Status);
         await refresher.Received(1).RefreshOneAsync(expectedProduct.SKU, Arg.Any<CancellationToken>());
         await reader.Received(2).GetDetailsAsync(expectedProduct.SKU, Arg.Any<CancellationToken>());
     }
@@ -68,11 +71,31 @@ public sealed class GetProductDetailsHandlerTests
 
         var result = await handler.HandleAsync(new GetProductDetailsQuery(expectedProduct.SKU));
 
-        Assert.Equal(expectedProduct, result);
+        Assert.Equal(expectedProduct, result.Value);
         await refresher.Received(1).RefreshOneAsync(expectedProduct.SKU, Arg.Any<CancellationToken>());
         await reader.Received(2).GetDetailsAsync(expectedProduct.SKU, Arg.Any<CancellationToken>());
         await freshnessPolicy.DidNotReceiveWithAnyArgs()
-            .GetRefreshDueAtUtcAsync(default!, default, default);
+            .GetMetadataAsync(default!, default, default);
+    }
+
+    [Fact]
+    public async Task HandleAsync_ReturnsStaleMaterializedProduct_WhenRefreshFails()
+    {
+        var reader = Substitute.For<IProductReadModelReader>();
+        var refresher = Substitute.For<IProductMaterializationRefresher>();
+        var freshnessPolicy = Substitute.For<IProductFreshnessPolicy>();
+        var expectedProduct = CreateProductDetailsDto("PROD-001");
+        var refreshedAtUtc = DateTime.UtcNow.AddHours(-1);
+        reader.GetDetailsAsync(expectedProduct.SKU, Arg.Any<CancellationToken>()).Returns(new MaterializedProductDetails(expectedProduct, refreshedAtUtc));
+        freshnessPolicy.GetMetadataAsync(expectedProduct, refreshedAtUtc, Arg.Any<CancellationToken>()).Returns(new MaterializationMetadata(MaterializationStatus.Stale, refreshedAtUtc));
+        refresher.RefreshOneAsync(expectedProduct.SKU, Arg.Any<CancellationToken>()).Returns(_ => throw new InvalidOperationException("Sfera unavailable."));
+        var handler = new GetProductDetailsHandler(reader, refresher, freshnessPolicy);
+
+        var result = await handler.HandleAsync(new GetProductDetailsQuery(expectedProduct.SKU));
+
+        Assert.Equal(expectedProduct, result.Value);
+        Assert.Equal(new MaterializationMetadata(MaterializationStatus.Stale, refreshedAtUtc), result.Metadata);
+        await reader.Received(1).GetDetailsAsync(expectedProduct.SKU, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -88,7 +111,8 @@ public sealed class GetProductDetailsHandlerTests
 
         var result = await handler.HandleAsync(new GetProductDetailsQuery(sku));
 
-        Assert.Null(result);
+        Assert.Null(result.Value);
+        Assert.Equal(MaterializationStatus.Fresh, result.Metadata.Status);
         await refresher.Received(1).RefreshOneAsync(sku, Arg.Any<CancellationToken>());
         await reader.Received(2).GetDetailsAsync(sku, Arg.Any<CancellationToken>());
     }

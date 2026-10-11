@@ -56,20 +56,22 @@ public sealed class TestApiFactory : WebApplicationFactory<Program>
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
+        var databaseDirectory = Path.Combine(Path.GetTempPath(), "connector-http-tests", Guid.NewGuid().ToString("N"));
+        _databaseDirectories.Add(databaseDirectory);
         builder.UseEnvironment("Development");
         builder.UseSetting("Auth:Mode", "ApiKey");
         builder.UseSetting("Auth:HeaderName", ApiKeyAuthenticationDefaults.HeaderName);
         builder.UseSetting("Auth:ApiKey", ValidTestApiKey);
+        builder.UseSetting("Idempotency:DatabasePath", Path.Combine(databaseDirectory, "test.db"));
+        builder.UseSetting("Materialization:DatabasePath", Path.Combine(databaseDirectory, "read-model.db"));
 
         builder.ConfigureAppConfiguration((_, config) =>
         {
-            var directory = Path.Combine(Path.GetTempPath(), "connector-http-tests", Guid.NewGuid().ToString("N"));
-            _databaseDirectories.Add(directory);
             config.AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Auth:Mode"] = "ApiKey",
-                ["Idempotency:DatabasePath"] = Path.Combine(directory, "test.db"),
-                ["Materialization:DatabasePath"] = Path.Combine(directory, "read-model.db"),
+                ["Idempotency:DatabasePath"] = Path.Combine(databaseDirectory, "test.db"),
+                ["Materialization:DatabasePath"] = Path.Combine(databaseDirectory, "read-model.db"),
                 ["Auth:HeaderName"] = ApiKeyAuthenticationDefaults.HeaderName,
                 ["Auth:ApiKey"] = ValidTestApiKey,
                 ["Nexo:Database:SqlServer"] = "test-sql",

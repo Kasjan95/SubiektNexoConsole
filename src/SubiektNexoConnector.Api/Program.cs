@@ -8,6 +8,7 @@ using SubiektNexoConnector.Api.Workers;
 using SubiektNexoConnector.Infrastructure;
 using SubiektNexoConnector.Infrastructure.Idempotency;
 using SubiektNexoConnector.Api.Idempotency;
+using SubiektNexoConnector.Api.Materialization;
 using SubiektNexoConnector.Infrastructure.Idempotency.Persistence;
 using SubiektNexoConnector.Infrastructure.Materialization;
 using System.Text.Json;
@@ -121,6 +122,7 @@ try
 
         await Results.Problem(statusCode: response.StatusCode).ExecuteAsync(httpContext);
     });
+    app.UseMiddleware<MaterializationMetadataMiddleware>();
 
     if (app.Environment.IsDevelopment())
     {

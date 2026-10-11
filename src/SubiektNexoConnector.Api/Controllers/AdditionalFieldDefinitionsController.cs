@@ -1,5 +1,6 @@
 using System.Net.Mime;
 using Microsoft.AspNetCore.Mvc;
+using SubiektNexoConnector.Api.Materialization;
 using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetAdvancedFieldDefinitions;
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetBasicFieldDefinitions;
@@ -23,7 +24,9 @@ public sealed class AdditionalFieldDefinitionsController : ControllerBase
         if (!IsValidTarget(target))
             return InvalidTarget();
 
-        return Ok(await handler.HandleAsync(new GetAdvancedFieldDefinitionsQuery(target.Value), cancellationToken));
+        var result = await handler.HandleAsync(new GetAdvancedFieldDefinitionsQuery(target.Value), cancellationToken);
+        HttpContext.SetMaterializationMetadata(result.Metadata);
+        return Ok(result.Value);
     }
 
     [HttpGet("basic")]

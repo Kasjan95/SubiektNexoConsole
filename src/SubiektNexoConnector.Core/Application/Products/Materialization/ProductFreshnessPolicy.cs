@@ -10,10 +10,7 @@ public sealed class ProductFreshnessPolicy : IProductFreshnessPolicy
     {
         _materializationPolicyStore = materializationPolicyStore;
     }
-    public async Task<DateTime> GetRefreshDueAtUtcAsync(
-        ProductDetailsDto product,
-        DateTime refreshedAtUtc,
-        CancellationToken cancellationToken = default)
+    public async Task<MaterializationMetadata> GetMetadataAsync(ProductDetailsDto product, DateTime refreshedAtUtc, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(product);
 
@@ -29,6 +26,6 @@ public sealed class ProductFreshnessPolicy : IProductFreshnessPolicy
             definition,
             cancellationToken);
 
-        return refreshedAtUtc.Add(policy.Lifetime);
+        return MaterializationMetadata.Evaluate(refreshedAtUtc, policy.Lifetime, policy.RefreshAhead, DateTime.UtcNow);
     }
 }

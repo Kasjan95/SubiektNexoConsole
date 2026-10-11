@@ -10,7 +10,7 @@ public sealed class ProductFreshnessPolicyTests
     [InlineData(1, 0, true)]
     [InlineData(0, 1, true)]
     [InlineData(0, 0, false)]
-    public async Task GetRefreshDueAtUtcAsync_SelectsPolicyFromTotalStock(
+    public async Task GetMetadataAsync_SelectsPolicyFromTotalStock(
         decimal availableStock,
         decimal reservedStock,
         bool expectedToBeHot)
@@ -19,7 +19,7 @@ public sealed class ProductFreshnessPolicyTests
             ? MaterializationPolicyDefinitions.ProductsHot
             : MaterializationPolicyDefinitions.ProductsCold;
         var store = Substitute.For<IMaterializationPolicyStore>();
-        var configuredLifetime = TimeSpan.FromSeconds(45);
+        var configuredLifetime = TimeSpan.FromMinutes(5);
         store.GetOrCreateAsync(
                 expectedDefinition,
                 Arg.Any<CancellationToken>())
@@ -33,12 +33,13 @@ public sealed class ProductFreshnessPolicyTests
                 expectedDefinition.Requirements,
                 new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
         var policy = new ProductFreshnessPolicy(store);
-        var refreshedAtUtc = new DateTime(2026, 10, 8, 8, 0, 0, DateTimeKind.Utc);
+        var refreshedAtUtc = DateTime.UtcNow;
         var product = CreateProduct(availableStock, reservedStock);
 
-        var result = await policy.GetRefreshDueAtUtcAsync(product, refreshedAtUtc);
+        var result = await policy.GetMetadataAsync(product, refreshedAtUtc);
 
-        Assert.Equal(refreshedAtUtc.Add(configuredLifetime), result);
+        Assert.Equal(MaterializationStatus.Fresh, result.Status);
+        Assert.Equal(refreshedAtUtc, result.LastSuccessAtUtc);
         await store.Received(1).GetOrCreateAsync(
             expectedDefinition,
             Arg.Any<CancellationToken>());

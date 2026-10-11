@@ -1,8 +1,10 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using SubiektNexoConnector.Api.Controllers;
 using SubiektNexoConnector.Api.Tests.TestDataBuilders;
 using SubiektNexoConnector.Core.Application.Products;
+using SubiektNexoConnector.Core.Materialization;
 
 namespace SubiektNexoConnector.Api.Tests.Controllers
 {
@@ -74,14 +76,14 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
 
             reader.GetDetailsAsync(product.SKU, Arg.Any<CancellationToken>())
                 .Returns(new MaterializedProductDetails(product, refreshedAtUtc));
-            freshnessPolicy.GetRefreshDueAtUtcAsync(
+            freshnessPolicy.GetMetadataAsync(
                     product,
                     refreshedAtUtc,
                     Arg.Any<CancellationToken>())
-                .Returns(DateTime.MaxValue);
+                .Returns(new MaterializationMetadata(MaterializationStatus.Fresh, refreshedAtUtc));
 
             var handler = new GetProductDetailsHandler(reader, refresher, freshnessPolicy);
-            var controller = new ProductsController();
+            var controller = CreateController();
 
             var actionResult = await controller.GetDetails(product.SKU, handler, CancellationToken.None);
 
@@ -102,11 +104,16 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
                 .Returns((MaterializedProductDetails?)null);
 
             var handler = new GetProductDetailsHandler(reader, refresher, freshnessPolicy);
-            var controller = new ProductsController();
+            var controller = CreateController();
 
             var actionResult = await controller.GetDetails(productSku, handler, CancellationToken.None);
 
             Assert.IsType<NotFoundResult>(actionResult.Result);
         }
+
+        private static ProductsController CreateController() => new()
+        {
+            ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+        };
     }
 }

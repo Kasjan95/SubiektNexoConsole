@@ -9,6 +9,7 @@ using SubiektNexoConnector.Core.Application.AdditionalFields.GetFlagDefinitions;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Materialization;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Common;
+using SubiektNexoConnector.Core.Materialization;
 
 namespace SubiektNexoConnector.Api.Tests.Controllers;
 
@@ -23,9 +24,10 @@ public sealed class AdditionalFieldDefinitionsControllerTests
             Array.Empty<AdvancedFieldGroupDto>(),
             [new("field-id", "Color", null, AdvancedFieldDataType.Text, false,
                 true, true, true, null, null, null, null, null)]);
-        materialization.GetCurrentAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(expected);
+        var expectedResult = new MaterializedResult<AdvancedFieldDefinitionsDto>(expected, new MaterializationMetadata(MaterializationStatus.Fresh, DateTime.UtcNow));
+        materialization.GetCurrentWithMetadataAsync(AdditionalFieldTarget.Product, Arg.Any<CancellationToken>()).Returns(expectedResult);
 
-        var result = await new AdditionalFieldDefinitionsController().GetAdvancedDefinitions(AdditionalFieldTarget.Product, new GetAdvancedFieldDefinitionsHandler(materialization), CancellationToken.None);
+        var result = await CreateController().GetAdvancedDefinitions(AdditionalFieldTarget.Product, new GetAdvancedFieldDefinitionsHandler(materialization), CancellationToken.None);
 
         var ok = Assert.IsType<OkObjectResult>(result.Result);
         Assert.Equal(expected, Assert.IsType<AdvancedFieldDefinitionsDto>(ok.Value));
