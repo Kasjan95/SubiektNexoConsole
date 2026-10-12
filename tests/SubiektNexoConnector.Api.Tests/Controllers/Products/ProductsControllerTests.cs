@@ -11,21 +11,22 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
     public class ProductsControllerTests
     {
         [Fact]
-        public void GetAll_ReturnsOkWithProducts()
+        public async Task GetAll_ReturnsOkWithProducts()
         {
-            var repository = Substitute.For<IProductRepository>();
+            var reader = Substitute.For<IProductReadModelReader>();
+            var checkpointStore = Substitute.For<IMaterializationCheckpointStore>();
+            var policyStore = Substitute.For<IMaterializationPolicyStore>();
             var products = new List<ProductBasicDto>
             {
                 new ProductBasicDto(1, "PROD-001", "Product 1", "1234567890123"),
                 new ProductBasicDto(2, "PROD-002", "Product 2", null)
             };
+            ConfigureCompletedDiscovery(checkpointStore, policyStore);
+            reader.GetAllAsync(Arg.Any<GetProductsQuery>(), Arg.Any<CancellationToken>()).Returns(products);
+            var handler = new GetProductsHandler(reader, checkpointStore, policyStore);
+            var controller = CreateController();
 
-            repository.GetAll(Arg.Any<GetProductsQuery>()).Returns(products);
-
-            var handler = new GetProductsHandler(repository);
-            var controller = new ProductsController();
-
-            var actionResult = controller.GetAll(handler);
+            var actionResult = await controller.GetAll(handler, cancellationToken: CancellationToken.None);
 
             var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
             var value = Assert.IsAssignableFrom<IReadOnlyCollection<ProductBasicDto>>(okResult.Value);
@@ -33,17 +34,18 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
         }
 
         [Fact]
-        public void GetAll_ReturnsOkWithEmptyCollection_WhenNoProductsExist()
+        public async Task GetAll_ReturnsOkWithEmptyCollection_WhenNoProductsExist()
         {
-            var repository = Substitute.For<IProductRepository>();
+            var reader = Substitute.For<IProductReadModelReader>();
+            var checkpointStore = Substitute.For<IMaterializationCheckpointStore>();
+            var policyStore = Substitute.For<IMaterializationPolicyStore>();
             var products = new List<ProductBasicDto>();
+            ConfigureCompletedDiscovery(checkpointStore, policyStore);
+            reader.GetAllAsync(Arg.Any<GetProductsQuery>(), Arg.Any<CancellationToken>()).Returns(products);
+            var handler = new GetProductsHandler(reader, checkpointStore, policyStore);
+            var controller = CreateController();
 
-            repository.GetAll(Arg.Any<GetProductsQuery>()).Returns(products);
-
-            var handler = new GetProductsHandler(repository);
-            var controller = new ProductsController();
-
-            var actionResult = controller.GetAll(handler);
+            var actionResult = await controller.GetAll(handler, cancellationToken: CancellationToken.None);
 
             var okResult = Assert.IsType<OkObjectResult>(actionResult.Result);
             var value = Assert.IsAssignableFrom<IReadOnlyCollection<ProductBasicDto>>(okResult.Value);
@@ -51,18 +53,38 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
         }
 
         [Fact]
-        public void GetAll_ReturnsValidationProblem_WhenPageIsOutsideContract()
+        public async Task GetAll_ReturnsValidationProblem_WhenPageIsOutsideContract()
         {
-            var repository = Substitute.For<IProductRepository>();
-            var handler = new GetProductsHandler(repository);
-            var controller = new ProductsController();
+            var reader = Substitute.For<IProductReadModelReader>();
+            var checkpointStore = Substitute.For<IMaterializationCheckpointStore>();
+            var policyStore = Substitute.For<IMaterializationPolicyStore>();
+            var handler = new GetProductsHandler(reader, checkpointStore, policyStore);
+            var controller = CreateController();
 
-            var actionResult = controller.GetAll(handler, page: 0);
+            var actionResult = await controller.GetAll(handler, page: 0, cancellationToken: CancellationToken.None);
 
             var badRequest = Assert.IsType<BadRequestObjectResult>(actionResult.Result);
             var problem = Assert.IsType<ValidationProblemDetails>(badRequest.Value);
             Assert.Contains("page", problem.Errors.Keys);
-            repository.DidNotReceive().GetAll(Arg.Any<GetProductsQuery>());
+            await checkpointStore.DidNotReceive().GetOrCreateAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+            await reader.DidNotReceive().GetAllAsync(Arg.Any<GetProductsQuery>(), Arg.Any<CancellationToken>());
+        }
+
+        [Fact]
+        public async Task GetAll_Returns503_WhenInitialDiscoveryHasNotCompleted()
+        {
+            var reader = Substitute.For<IProductReadModelReader>();
+            var checkpointStore = Substitute.For<IMaterializationCheckpointStore>();
+            var policyStore = Substitute.For<IMaterializationPolicyStore>();
+            checkpointStore.GetOrCreateAsync(MaterializationPolicyDefinitions.ProductsNew.Id, Arg.Any<CancellationToken>()).Returns(CreateCheckpoint(null));
+            var handler = new GetProductsHandler(reader, checkpointStore, policyStore);
+            var controller = CreateController();
+
+            var actionResult = await controller.GetAll(handler, cancellationToken: CancellationToken.None);
+
+            var statusResult = Assert.IsType<StatusCodeResult>(actionResult.Result);
+            Assert.Equal(StatusCodes.Status503ServiceUnavailable, statusResult.StatusCode);
+            await reader.DidNotReceive().GetAllAsync(Arg.Any<GetProductsQuery>(), Arg.Any<CancellationToken>());
         }
 
         [Fact]
@@ -115,5 +137,14 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
         {
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
+
+        private static void ConfigureCompletedDiscovery(IMaterializationCheckpointStore checkpointStore, IMaterializationPolicyStore policyStore)
+        {
+            var definition = MaterializationPolicyDefinitions.ProductsNew;
+            checkpointStore.GetOrCreateAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(CreateCheckpoint(DateTime.UtcNow));
+            policyStore.GetOrCreateAsync(definition, Arg.Any<CancellationToken>()).Returns(new MaterializationPolicy(definition.Id, definition.Name, definition.Lifetime, definition.RefreshAhead, definition.BatchSize, definition.CandidateSelection, definition.Requirements, DateTime.UtcNow));
+        }
+
+        private static MaterializationCheckpoint CreateCheckpoint(DateTime? completedAtUtc) => new(MaterializationPolicyDefinitions.ProductsNew.Id, null, null, null, completedAtUtc, null, null);
     }
 }

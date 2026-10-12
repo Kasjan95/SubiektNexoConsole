@@ -24,21 +24,17 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
-    public async Task GetProducts_Returns200AndJsonBody()
+    public async Task GetProducts_Returns503_WhenInitialDiscoveryHasNotCompleted()
     {
-        var products = new[]
-        {
-            new ProductBasicDto(1, "ABC-123", "Test product", "5901234567890")
-        };
-
-        _factory.Products.GetAll(Arg.Any<GetProductsQuery>()).Returns(products);
+        _factory.Products.ClearReceivedCalls();
 
         var response = await _client.GetAsync("/products");
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var body = await response.Content.ReadFromJsonAsync<ProductBasicDto[]>();
-        body.Should().BeEquivalentTo(products);
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        response.Headers.GetValues(MaterializationMetadataMiddleware.StatusHeaderName).Single().Should().Be("unavailable");
+        response.Headers.Contains(MaterializationMetadataMiddleware.AgeSecondsHeaderName).Should().BeFalse();
+        response.Headers.Contains(MaterializationMetadataMiddleware.LastSuccessAtHeaderName).Should().BeFalse();
+        _factory.Products.DidNotReceive().GetAll(Arg.Any<GetProductsQuery>());
     }
 
     [Fact]

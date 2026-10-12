@@ -1,7 +1,5 @@
 using FluentAssertions;
-using NSubstitute;
 using SubiektNexoConnector.Api.Auth;
-using SubiektNexoConnector.Core.Application.Products;
 using System.Net;
 
 namespace SubiektNexoConnector.Api.Tests.Integration;
@@ -40,10 +38,8 @@ public class AuthenticationHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
-    public async Task GetProducts_Returns200_WhenApiKeyHeaderIsValid()
+    public async Task GetProducts_PassesAuthentication_WhenApiKeyHeaderIsValid()
     {
-        _factory.Products.GetAll(Arg.Any<GetProductsQuery>()).Returns(Array.Empty<ProductBasicDto>());
-
         using var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add(
             ApiKeyAuthenticationDefaults.HeaderName,
@@ -51,6 +47,6 @@ public class AuthenticationHttpTests : IClassFixture<TestApiFactory>
 
         var response = await client.GetAsync("/products");
 
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
     }
 }
