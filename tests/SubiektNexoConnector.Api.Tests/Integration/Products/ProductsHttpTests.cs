@@ -100,13 +100,14 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
             "Test product",
             "ABC-123",
             "5901234567890");
+        var product = ProductDetailsDtoTestData.CreateProductDetailsDto(request.SKU!, request.EAN);
 
         _factory.Products
             .Create(Arg.Is<CreateProductCommand>(command =>
                 command.Name == request.Name &&
                 command.SKU == request.SKU &&
                 command.EAN == request.EAN))
-            .Returns("ABC-123");
+            .Returns(product);
 
         var response = await _client.PostAsJsonAsync("/products", request);
 
@@ -114,8 +115,16 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
         response.Headers.Location.Should().NotBeNull(); 
         response.Headers.Location!.AbsolutePath.Should().Be("/Products/ABC-123");
 
-        var body = await response.Content.ReadFromJsonAsync<CreateProductResponseDto>();
-        body.Should().BeEquivalentTo(new CreateProductResponseDto("ABC-123"));
+        var body = await response.Content.ReadFromJsonAsync<ProductDetailsDto>();
+        body.Should().BeEquivalentTo(product);
+
+        _factory.Products.ClearReceivedCalls();
+        var materializedResponse = await _client.GetAsync($"/products/{product.SKU}");
+        var materializedBody = await materializedResponse.Content.ReadFromJsonAsync<ProductDetailsDto>();
+
+        materializedResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        materializedBody.Should().BeEquivalentTo(product);
+        _factory.Products.DidNotReceive().GetDetails(product.SKU, Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -163,6 +172,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
             new("Updated product"),
             new("NEW-ABC-123"),
             new("5901234567890"));
+        var product = ProductDetailsDtoTestData.CreateProductDetailsDto("NEW-ABC-123", "5901234567890") with { Name = "Updated product" };
 
         _factory.Products
             .Patch(Arg.Is<PatchProductCommand>(command =>
@@ -173,14 +183,14 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
                 && command.SKU.Value == "NEW-ABC-123"
                 && command.EAN.HasValue
                 && command.EAN.Value == "5901234567890"))
-            .Returns("NEW-ABC-123");
+            .Returns(product);
 
         var response = await _client.PatchAsJsonAsync("/products/ABC-123", request);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-        var body = await response.Content.ReadFromJsonAsync<PatchProductResponseDto>();
-        body.Should().BeEquivalentTo(new PatchProductResponseDto("NEW-ABC-123"));
+        var body = await response.Content.ReadFromJsonAsync<ProductDetailsDto>();
+        body.Should().BeEquivalentTo(product);
     }
 
     [Fact]
@@ -193,7 +203,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
 
         _factory.Products
             .Patch(Arg.Any<PatchProductCommand>())
-            .Returns((string?)null);
+            .Returns((ProductDetailsDto?)null);
 
         var response = await _client.PatchAsJsonAsync("/products/missing", request);
 
@@ -234,7 +244,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
         };
         _factory.Products
             .Patch(Arg.Is<PatchProductCommand>(command => HasAdditionalFieldUpdates(command)))
-            .Returns("ABC-123");
+            .Returns(ProductDetailsDtoTestData.CreateProductDetailsDto("ABC-123"));
 
         var response = await _client.PatchAsJsonAsync("/products/ABC-123", request);
 
@@ -254,7 +264,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
                 && command.Flag.HasValue
                 && command.Flag.Value!.Id == 12
                 && command.Flag.Value.Comment == "Require confirmation"))
-            .Returns("ABC-123");
+            .Returns(ProductDetailsDtoTestData.CreateProductDetailsDto("ABC-123", flag: new FlagAssignmentDto(12, "Require confirmation")));
 
         var response = await _client.PatchAsJsonAsync("/products/ABC-123", request);
 
@@ -270,7 +280,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
                 command.ProductSku == "ABC-123"
                 && command.Flag.HasValue
                 && command.Flag.Value == null))
-            .Returns("ABC-123");
+            .Returns(ProductDetailsDtoTestData.CreateProductDetailsDto("ABC-123", flag: null));
 
         var response = await _client.PatchAsJsonAsync("/products/ABC-123", request);
 
@@ -284,7 +294,7 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
     {
         var sku = "retry-" + Guid.NewGuid().ToString("N");
         var key = Guid.NewGuid().ToString("N");
-        _factory.Products.Patch(Arg.Is<PatchProductCommand>(c => c.ProductSku == sku)).Returns(sku);
+        _factory.Products.Patch(Arg.Is<PatchProductCommand>(c => c.ProductSku == sku)).Returns(ProductDetailsDtoTestData.CreateProductDetailsDto(sku));
         _factory.Products.Delete(Arg.Is<DeleteProductCommand>(c => c.SKU == sku))
             .Returns(DeleteProductResult.Deleted, DeleteProductResult.NotFound);
         HttpRequestMessage Request()

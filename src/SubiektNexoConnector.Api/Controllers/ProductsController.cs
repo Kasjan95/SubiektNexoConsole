@@ -13,11 +13,12 @@ namespace SubiektNexoConnector.Api.Controllers;
 public class ProductsController : ControllerBase
 {
     [HttpPost]
-    [ProducesResponseType(typeof(CreateProductResponseDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(ProductDetailsDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public ActionResult<CreateProductResponseDto> Create(
+    public async Task<ActionResult<ProductDetailsDto>> Create(
         [FromBody] CreateProductRequestDto request,
-        [FromServices] CreateProductHandler handler)
+        [FromServices] CreateProductHandler handler,
+        CancellationToken cancellationToken)
     {
         var command = new CreateProductCommand(
             request.Name,
@@ -25,12 +26,12 @@ public class ProductsController : ControllerBase
             request.EAN
         );
 
-        var sku = handler.Handle(command);
+        var product = await handler.HandleAsync(command, cancellationToken);
 
         return CreatedAtAction(
             nameof(GetDetails),
-            new { sku },
-            new CreateProductResponseDto(sku));
+            new { sku = product.SKU },
+            product);
     }
 
     [HttpGet]
@@ -74,13 +75,14 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPatch("{sku}")]
-    [ProducesResponseType(typeof(PatchProductResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProductDetailsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<PatchProductResponseDto> Patch(
+    public async Task<ActionResult<ProductDetailsDto>> Patch(
         string sku,
         [FromBody] PatchProductRequestDto request,
-        [FromServices] PatchProductHandler handler)
+        [FromServices] PatchProductHandler handler,
+        CancellationToken cancellationToken)
     {
         var command = new PatchProductCommand(
             sku,
@@ -91,22 +93,20 @@ public class ProductsController : ControllerBase
             request.AdvancedFields,
             request.Flag);
 
-        var updatedSku = handler.Handle(command);
-        if (updatedSku is null)
+        var product = await handler.HandleAsync(command, cancellationToken);
+        if (product is null)
             return NotFound();
 
-        return Ok(new PatchProductResponseDto(updatedSku));
+        return Ok(product);
     }
 
     [HttpDelete("{sku}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public IActionResult Delete(
-        string sku,
-        [FromServices] DeleteProductHandler handler)
+    public async Task<IActionResult> Delete(string sku, [FromServices] DeleteProductHandler handler, CancellationToken cancellationToken)
     {
-        var result = handler.Handle(new DeleteProductCommand(sku));
+        var result = await handler.HandleAsync(new DeleteProductCommand(sku), cancellationToken);
 
         if (result == DeleteProductResult.NotFound)
             return NotFound();

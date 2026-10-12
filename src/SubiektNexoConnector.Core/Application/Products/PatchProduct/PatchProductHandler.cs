@@ -6,13 +6,15 @@ namespace SubiektNexoConnector.Core.Application.Products
     public sealed class PatchProductHandler
     {
         private readonly IProductRepository _repository;
+        private readonly IProductReadModelSynchronizer _readModelSynchronizer;
 
-        public PatchProductHandler(IProductRepository repository)
+        public PatchProductHandler(IProductRepository repository, IProductReadModelSynchronizer readModelSynchronizer)
         {
             _repository = repository;
+            _readModelSynchronizer = readModelSynchronizer;
         }
 
-        public string? Handle(PatchProductCommand command)
+        public async Task<ProductDetailsDto?> HandleAsync(PatchProductCommand command, CancellationToken cancellationToken = default)
         {
             if (!command.Name.HasValue
                 && !command.SKU.HasValue
@@ -29,7 +31,7 @@ namespace SubiektNexoConnector.Core.Application.Products
             var advancedFields = OptionalPatchNormalizer.AdditionalFields(command.AdvancedFields, "AdvancedFields");
             var flag = OptionalPatchNormalizer.Flag(command.Flag);
 
-            return _repository.Patch(new PatchProductCommand(
+            var product = _repository.Patch(new PatchProductCommand(
                 command.ProductSku,
                 normalizedName,
                 normalizedSku,
@@ -37,6 +39,12 @@ namespace SubiektNexoConnector.Core.Application.Products
                 basicFields,
                 advancedFields,
                 flag));
+
+            if (product is null)
+                return null;
+
+            await _readModelSynchronizer.TryUpsertAsync(product, cancellationToken);
+            return product;
         }
 
     }

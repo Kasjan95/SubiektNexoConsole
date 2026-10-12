@@ -236,10 +236,18 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             product.Nazwa,
             product.JednostkaMagazynowa?.PodstawowyKodKreskowy?.Kod ?? string.Empty);
 
-        public string Create(CreateProductCommand command)
+        public ProductDetailsDto Create(CreateProductCommand command)
         {
             return _sferaExecutor.Execute(sfera =>
             {
+                var productSymbol = CreateProductCore(sfera, command);
+                return GetDetailsCore(sfera, productSymbol, CreateProductDetailsContext(sfera))
+                    ?? throw new InvalidOperationException($"Created product '{productSymbol}' could not be read back.");
+            });
+        }
+
+        private static string CreateProductCore(Uchwyt sfera, CreateProductCommand command)
+        {
             using var product = sfera.Asortymenty().Utworz();
 
             product.WypelnijNaPodstawieSzablonu(sfera.SzablonyAsortymentu().DaneDomyslne.Towar);
@@ -264,12 +272,21 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             }
 
             return product.Dane.Symbol;
-            });
         }
-        public string? Patch(PatchProductCommand command)
+        public ProductDetailsDto? Patch(PatchProductCommand command)
         {
             return _sferaExecutor.Execute(sfera =>
             {
+                var updatedSku = PatchCore(sfera, command);
+                return updatedSku is null
+                    ? null
+                    : GetDetailsCore(sfera, updatedSku, CreateProductDetailsContext(sfera))
+                        ?? throw new InvalidOperationException($"Updated product '{updatedSku}' could not be read back.");
+            });
+        }
+
+        private static string? PatchCore(Uchwyt sfera, PatchProductCommand command)
+        {
             var product = sfera.Asortymenty().Dane.WyszukajPoSymbolu(command.ProductSku);
             if (product is null)
                 return null;
@@ -349,7 +366,6 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 UpdateProductFlag(sfera, product.Id, command.Flag.Value);
 
             return updatedSku;
-            });
         }
 
         public IReadOnlyCollection<ProductBasicDto> GetBatchAfterId(

@@ -12,8 +12,8 @@ namespace SubiektNexoConnector.Core.Application.Products
             IReadOnlyCollection<string> productSymbols,
             CancellationToken cancellationToken = default);
 
-        string Create(CreateProductCommand command);
-        string? Patch(PatchProductCommand command);
+        ProductDetailsDto Create(CreateProductCommand command);
+        ProductDetailsDto? Patch(PatchProductCommand command);
         DeleteProductResult Delete(DeleteProductCommand command);
         IReadOnlyCollection<ProductMaterializationKey> GetAllMaterializationCandidates(
             CancellationToken cancellationToken = default);

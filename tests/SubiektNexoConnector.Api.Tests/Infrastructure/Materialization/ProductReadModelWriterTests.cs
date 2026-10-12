@@ -69,7 +69,8 @@ public sealed class ProductReadModelWriterTests
                 ],
                 suppliers: [new(10, "Supplier A updated", "222", true, "A-2", null)],
                 prices: [new("Retail", 20m, 24.60m)],
-                stocks: [new("SECONDARY", 7m, 2m)]),
+                stocks: [new("SECONDARY", 7m, 2m)],
+                sku: "SKU-UPDATED"),
             definitions,
             secondRefresh);
 
@@ -84,6 +85,7 @@ public sealed class ProductReadModelWriterTests
             .ToDictionaryAsync(field => field.FieldId);
 
         Assert.Equal("Updated product", product.Name);
+        Assert.Equal("SKU-UPDATED", product.Sku);
         Assert.Equal(secondRefresh, product.RefreshedAtUtc);
         Assert.Null(basicFields.Field1);
         Assert.Equal("new basic value", basicFields.Field2);
@@ -175,15 +177,9 @@ public sealed class ProductReadModelWriterTests
         return new ReadModelDbContext(options);
     }
 
-    private static ProductDetailsDto CreateProduct(
-        string name,
-        IReadOnlyCollection<AdditionalFieldValueDto> basicFields,
-        IReadOnlyCollection<AdditionalFieldValueDto> advancedFields,
-        IReadOnlyCollection<ProductSupplierDto> suppliers,
-        IReadOnlyCollection<ProductPriceDto> prices,
-        IReadOnlyCollection<ProductStockDto> stocks) => new(
+    private static ProductDetailsDto CreateProduct(string name, IReadOnlyCollection<AdditionalFieldValueDto> basicFields, IReadOnlyCollection<AdditionalFieldValueDto> advancedFields, IReadOnlyCollection<ProductSupplierDto> suppliers, IReadOnlyCollection<ProductPriceDto> prices, IReadOnlyCollection<ProductStockDto> stocks, string sku = "SKU-1") => new(
         1,
-        "SKU-1",
+        sku,
         name,
         "5900000000001",
         new ProductTypeDto("towar", "Towar"),

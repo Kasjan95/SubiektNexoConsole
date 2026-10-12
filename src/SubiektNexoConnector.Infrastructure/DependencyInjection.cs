@@ -81,6 +81,7 @@ public static class DependencyInjection
         services.AddDbContext<ReadModelDbContext>(options => options.UseSqlite(readModelConnectionString));
         services.AddScoped<IProductReadModelWriter, ProductReadModelWriter>();
         services.AddScoped<IProductReadModelReader, ProductReadModelReader>();
+        services.AddScoped<IProductReadModelSynchronizer, ProductReadModelSynchronizer>();
         services.AddScoped<IAdvancedFieldDefinitionsReadModelReader, AdvancedFieldDefinitionsReadModelReader>();
         services.AddScoped<IAdvancedFieldDefinitionsReadModelWriter, AdvancedFieldDefinitionsReadModelWriter>();
         services.AddScoped<IAdvancedFieldDefinitionsMaterializationRefresher, AdvancedFieldDefinitionsMaterializationRefresher>();
