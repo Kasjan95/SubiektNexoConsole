@@ -2,7 +2,7 @@
 
 SubiektNexoConnector is a local REST adapter for InsERT nexo. It keeps the vendor-specific SDK and Sfera integration in .NET, while exposing a smaller HTTP contract for scripts, automation tools and applications that should not depend on the nexo object model directly.
 
-The connector currently supports product, warehouse and party workflows. In addition to reads, it exposes selected write operations, nested party addresses and contacts, custom field values, custom field definitions and flags.
+The connector currently supports product, warehouse and party workflows. In addition to reads, it exposes selected write operations, nested party addresses and contacts, custom field values, custom field definitions and flags. Expensive product and party reads are served from a durable SQLite materialized read model maintained by background workers and write-through synchronization.
 
 ## Project Status
 
@@ -17,6 +17,10 @@ Pilot-stage integration software, not a production-qualified installer. The repo
 - Basic and advanced custom field values on products and parties.
 - Discovery of basic field, advanced field, dictionary and flag definitions.
 - Flag assignment and removal through product and party PATCH requests.
+- Durable SQLite materialization of products, parties and advanced-field definitions.
+- Policy-driven background refresh with product `hot`, `cold` and `new` workloads.
+- Read-through refresh for individual resources and write-through synchronization after successful writes.
+- Explicit freshness metadata on GET responses and deterministic `503` behavior before a collection is ready.
 - API key authentication, RFC 7807-style problem responses and Swagger UI.
 - Application and HTTP-level tests that do not require a live nexo database.
 - WPF deployment wizard with external per-instance configuration, protected API-key export and Windows integration.
@@ -34,6 +38,7 @@ More detailed trade-offs are documented in Polish in [docs/decyzje-architektonic
 
 - **Vendor isolation:** HTTP DTOs and use cases do not expose nexo business objects.
 - **Stateful SDK boundary:** serialized Sfera access, queue deadlines and explicit object-locking/persistence rules.
+- **Materialized read model:** EF Core and SQLite provide fast, durable projections without becoming the business source of truth.
 - **Operational lifecycle:** InsLauncher startup, password-logon scheduled tasks, scoped firewall rules and per-instance ACLs.
 - **Failure visibility:** HTTP health is distinct from an authenticated Sfera test; updates also check the running binary's release metadata.
 - **Test boundaries:** in-memory HTTP tests, deployment policy tests and opt-in Windows integration tests; live SDK acceptance is a separate responsibility.
@@ -44,9 +49,9 @@ More detailed trade-offs are documented in Polish in [docs/decyzje-architektonic
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `POST` | `/products` | Create a product. |
-| `GET` | `/products` | List and search products with pagination. |
-| `GET` | `/products/{sku}` | Get product details, prices, stock, suppliers, flags and custom fields. |
+| `POST` | `/products` | Create a product, including advanced custom-field values. |
+| `GET` | `/products` | List and search the complete materialized product collection with pagination. |
+| `GET` | `/products/{sku}` | Get materialized product details, prices, stock, suppliers, flags and custom fields, with read-through refresh when required. |
 | `PATCH` | `/products/{sku}` | Partially update product data, custom fields or flag assignment. |
 | `DELETE` | `/products/{sku}` | Delete a product when nexo allows it. |
 
@@ -63,10 +68,10 @@ The product list accepts `search`, `page` and `pageSize` query parameters. Page 
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
-| `POST` | `/parties` | Create a party, optionally with addresses and contacts. |
-| `GET` | `/parties` | List and search parties with filtering and pagination. |
+| `POST` | `/parties` | Create a party, optionally with addresses, contacts and advanced custom-field values. |
+| `GET` | `/parties` | List and search the complete materialized party collection with filtering and pagination. |
 | `GET` | `/parties/create-options` | Get party types and reference data required by create forms. |
-| `GET` | `/parties/{partySignature}` | Get party details, addresses, contacts, trade credit limits, flags and custom fields. |
+| `GET` | `/parties/{partySignature}` | Get materialized party details, addresses, contacts, trade credit limits, flags and custom fields, with read-through refresh when required. |
 | `PATCH` | `/parties/{partySignature}` | Partially update party data, custom fields or flag assignment. |
 
 The party list accepts `customerStatus`, `type`, `search`, `page` and `pageSize` query parameters. Page numbering starts at `1`; invalid pagination values return `400`. The default and maximum page sizes are configured through `Api:Pagination`.
@@ -95,7 +100,31 @@ The party list accepts `customerStatus`, `type`, `search`, `page` and `pageSize`
 | `GET` | `/Additional-field-definitions/advanced?target={target}` | Get advanced field definitions, groups and supported dictionary values. |
 | `GET` | `/Additional-field-definitions/flags` | Get flag definitions grouped by domain. An optional `domain` query parameter narrows the result. |
 
-Custom field values are returned in product and party details. They can be updated by sending `basicFields` or `advancedFields` in the corresponding PATCH request. A flag can be assigned, updated or removed through the `flag` property.
+Custom field values are returned in product and party details. Product and party creation accepts `advancedFields`; PATCH accepts `basicFields` and `advancedFields`. A flag can be assigned, updated or removed through the PATCH `flag` property. Field definitions should be queried before constructing dynamic payloads because IDs, types, dictionaries and required fields differ between nexo installations.
+
+See [docs/custom-fields.md](docs/custom-fields.md) for value formats and request examples.
+
+## Materialized Read Model
+
+Products, parties and advanced custom-field definitions are projected into a per-instance SQLite database. The database is a rebuildable read model, not an alternative source of business truth: nexo remains authoritative and every business write is performed through Sfera.
+
+The API applies three consistency rules:
+
+- Collection endpoints read only from SQLite. Until the first complete materialization cycle finishes, they return `503 Service Unavailable` instead of issuing an expensive full fallback query to nexo.
+- Individual product and party endpoints use read-through behavior. Missing or stale data is refreshed from nexo, written to SQLite and then read back. If refresh fails but an older snapshot exists, the endpoint returns that snapshot as `stale`.
+- Successful product and party writes update the read model on a best-effort basis. Nested party address and contact changes synchronize the complete returned party snapshot.
+
+Successful GET responses expose materialization freshness through:
+
+```text
+Materialization-Status: fresh | refresh-due | stale | unavailable
+Materialization-Age-Seconds: 42
+Materialization-Last-Success-At: 2026-10-14T10:15:00.0000000Z
+```
+
+The SQLite schema is migrated automatically before the API starts accepting requests. Background services refresh data according to persisted policies and checkpoints while sharing the same serialized Sfera execution gate as HTTP requests.
+
+See [docs/materialization.md](docs/materialization.md) for policy values, failure semantics, database locations and extension guidance.
 
 ## Business Write Idempotency
 
@@ -217,6 +246,16 @@ For local development only, authentication can be disabled with:
 
 The template also configures Serilog console logging and an optional Seq sink at `http://localhost:5341`.
 
+The materialized read model path is configured independently from the idempotency store:
+
+```json
+"Materialization": {
+  "DatabasePath": "data\\read-model.db"
+}
+```
+
+Relative paths are resolved against the application base directory. The development configuration uses `data\read-model.dev.db`; a deployed instance uses the path from its external instance settings.
+
 Set `Observability:AdapterInstance` and `Observability:NexoCompany` uniquely for every deployed adapter. Every Seq event is enriched with `Service`, `Environment`, `AdapterInstance`, `NexoCompany`, and `MachineName`.
 
 Every response includes `X-Correlation-Id`. A client may provide a UUID in that request header to preserve one identifier across its backend and this adapter; otherwise the adapter generates one. The identifier is also added to request logs, Sfera logs, and Problem Details responses.
@@ -232,7 +271,7 @@ The connector serializes SDK access inside one API process. The optional `Nexo:S
 }
 ```
 
-A timed-out request receives `503 Service Unavailable` with `Retry-After`. Structured logs include the queue wait, Sfera execution time, queue depth, operation name and result.
+A timed-out request receives `503 Service Unavailable` with `Retry-After`. Structured logs distinguish queue wait, Sfera connection, SDK operation and handle disposal time, together with queue depth, operation name, execution origin and result. Materialization workers set `ExecutionOrigin=MaterializationWorker` and include the active policy ID.
 
 ## Running Locally
 
@@ -374,7 +413,10 @@ It currently resolves warehouses and prints their symbols and names.
 ## Current Limitations
 
 - The connector is Windows-only because the nexo SDK and Sfera runtime are Windows-specific.
-- Requests currently use live SDK sessions; there is no cache layer yet.
+- Materialization currently covers products, parties and advanced custom-field definitions. Warehouses, basic-field definitions and flag definitions still use live Sfera reads.
+- Materialization policies are persisted in SQLite, but their available definitions and matching fields are still initialized from code; there is no policy-management API.
+- SQLite and nexo do not share a transaction. A successful nexo write is authoritative even if the best-effort read-model synchronization fails; the background worker repairs the projection later.
+- Workers and HTTP requests share the same serialized Sfera executor. There is no long-lived Sfera session or priority queue yet, so opening and disposing SDK handles remains a significant part of refresh cost.
 - Repository operations are synchronous because they wrap synchronous vendor APIs.
 - The public surface intentionally covers selected integration scenarios rather than the entire nexo model.
 - The pilot boot task starts InsLauncher and requests Task Scheduler retries when its action reports failure.
@@ -383,11 +425,14 @@ It currently resolves warehouses and prints their symbols and names.
 
 ## Roadmap
 
-- Cache for expensive read scenarios and slower SDK-backed endpoints.
-- A worker for refresh jobs, exports and asynchronous integration flows.
-- Broader reference-data and document-related resources.
+- Materialized document resources, beginning with document headers and their positions.
+- A serialized priority queue that can reuse one Sfera session for multiple operations and yield to interactive API traffic.
+- A policy configurator for refresh intervals, candidate conditions, priorities and batch sizes.
+- Materialization of remaining reference data where measurements justify it.
+- An AI-facing, read-only API layer with allowlisted, anonymized GET representations and a dedicated API-key scope restricted to that resource group. The scope is not treated as protection from a local process that can bypass the API: an AI agent must run under a separate, non-administrative operating-system account with no access to the nexo database, adapter credentials or materialized SQLite files. Running it on a separate physical or virtual machine is the preferred deployment boundary.
+- Broader document-related resources, exports and asynchronous integration flows.
 - More infrastructure-level verification against a controlled nexo test environment.
-- Improved observability for live SDK calls, locks and validation failures.
+- Improved observability for materialization lag, queue pressure, locks and validation failures.
 
 ## License
 

@@ -368,9 +368,11 @@ FodyWeavers.xsd
 /tmp/nexo-chm/html
 /.dotnet
 
-# Local deployment planning notes
+# Local and generated documentation artifacts
 /docs/pilot-deployment-plan.local.md
-/docs
+/docs/Totalnie nie wygenerowane przez AI.html
 /output/pdf
 /tmp/pdfs
 /tools/Invoke-PartiesIdempotencyProbe.ps1
+/docs/pilot-migration-review.md
+/docs/installer-production-readiness-plan.md

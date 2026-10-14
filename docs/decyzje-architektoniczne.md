@@ -108,9 +108,9 @@ Oczekiwanie na bramkę jest ograniczone konfiguracją `Nexo:SferaExecution:Queue
 
 `SemaphoreSlim` ogranicza równoległość w pojedynczym procesie, ale nie koordynuje wielu instancji API i nie gwarantuje wykonania kolejnych operacji na tym samym wątku. Jeżeli przyszłe testy wykażą zależność Sfery od stałego wątku, następnym etapem będzie pojedynczy worker.
 
-### Drugi etap: kolejka i dedykowany worker
+### Drugi etap: kolejka i dedykowany worker Sfery
 
-Jeżeli SDK okaże się zależne od konkretnego wątku, wymaga STA albo semafor nie zapewni wystarczającej kontroli, operacje mogą zostać skierowane do kolejki obsługiwanej przez pojedynczego workera. Naturalnym pierwszym krokiem jest ograniczony `Channel<T>` z jednym konsumentem wewnątrz procesu API.
+Jeżeli SDK okaże się zależne od konkretnego wątku, wymaga STA albo semafor nie zapewni wystarczającej kontroli, operacje mogą zostać skierowane do kolejki obsługiwanej przez pojedynczego workera Sfery. Naturalnym pierwszym krokiem jest ograniczony `Channel<T>` z jednym konsumentem wewnątrz procesu API. Nie należy mylić go z istniejącymi usługami `BackgroundService`, które planują materializację, ale nadal wywołują wspólny `ISferaExecutor`.
 
 Worker może posiadać własny wątek i kontrolować pełny cykl życia sesji Sfery. Ograniczona pojemność kanału zapewnia backpressure i zapobiega niekontrolowanemu wzrostowi użycia pamięci.
 
@@ -135,27 +135,41 @@ Zmiana modelu wykonania powinna wynikać z danych. Sygnałami do wprowadzenia br
 - operacje utrzymujące połączenie HTTP przez zbyt długi czas,
 - potrzeba trwałych retry lub wznowienia pracy po restarcie.
 
-## Planowany cache i odświeżanie danych
+## Materializowany model odczytowy i odświeżanie danych
 
-### Jawne rozróżnienie danych `live` i `cached`
+### SQLite jako odbudowywalna projekcja
 
-Kosztowne odczyty, takie jak duże listy, stany lub rozbudowane szczegóły, mogą docelowo korzystać z cache. Klient musi jednak wiedzieć, czy otrzymał dane bezpośrednio ze Sfery, czy kopię o kontrolowanej świeżości.
+Decyzja z 2026-10: kosztowne odczyty produktów, kontrahentów i definicji zaawansowanych pól własnych korzystają z trwałego modelu odczytowego w SQLite. Nie jest to klasyczny cache obiektów ani druga baza biznesowa. SQLite przechowuje odbudowywalną projekcję danych pobranych przez oficjalne SDK, natomiast nexo pozostaje jedynym źródłem prawdy i jedynym miejscem wykonywania operacji biznesowych.
 
-Odpowiedź albo jej metadane powinny przekazywać co najmniej:
+Encje EF Core należą do warstwy infrastruktury. Publiczne DTO i przypadki użycia pozostają niezależne od schematu SQLite, tak samo jak pozostają niezależne od typów SDK. Dzięki temu wymiana sposobu persystencji projekcji nie zmienia kontraktu HTTP ani modelu aplikacyjnego.
 
-- źródło `live` lub `cached`,
-- czas pobrania danych ze Sfery,
-- opcjonalnie maksymalny akceptowany wiek danych.
+Każda instancja adaptera ma osobny plik read modelu. Migracje EF Core są wykonywane automatycznie przed uruchomieniem endpointów. Usunięcie pliku nie usuwa danych biznesowych z nexo; powoduje jedynie konieczność ponownego zbudowania materializacji.
 
-Operacja zapisu powinna aktualizować albo unieważniać powiązane wpisy cache. Brak tej reguły prowadziłby do sytuacji, w której API po poprawnym zapisie zwraca nieaktualny odczyt.
+### Semantyka odczytów
 
-### Worker interwałowy dla systemów o małym ruchu
+Obowiązują trzy różne reguły:
 
-Dla systemów o małym ruchu prostszy od infrastruktury eventowej może być worker odświeżający wybrane dane w określonych interwałach. Pozwala on przenieść koszt odczytu poza ścieżkę żądania i utrzymywać przewidywalny maksymalny wiek danych.
+- endpoint kolekcji odczytuje wyłącznie kompletną materializację; przed zakończeniem pierwszego pełnego cyklu zwraca `503 Service Unavailable`, zamiast wykonywać kosztowny pełny fallback do Sfery,
+- endpoint pojedynczego produktu lub kontrahenta stosuje read-through: brakujące albo przeterminowane dane są pobierane ze Sfery, zapisywane do SQLite i ponownie odczytywane z modelu,
+- jeżeli odświeżenie pojedynczego zasobu nie powiedzie się, ale istnieje starszy snapshot, API może zwrócić go ze statusem `stale`; brak snapshotu nie jest maskowany jako poprawna materializacja.
 
-Interwały powinny być konfigurowalne osobno dla różnych kategorii danych. Stany magazynowe mogą wymagać częstszego odświeżania niż definicje pól dodatkowych. Mechanizm powinien także umożliwiać ręczne wymuszenie odświeżenia oraz pomijać uruchomienie kolejnej instancji zadania, jeżeli poprzednia nadal trwa.
+GET-y zwracają nagłówki `Materialization-Status`, `Materialization-Age-Seconds` i `Materialization-Last-Success-At`. Statusy `fresh`, `refresh-due`, `stale` i `unavailable` ujawniają stan danych bez dodawania technicznych pól do biznesowych DTO. Zasoby jeszcze niematerializowane otrzymują domyślne metadane `fresh` tylko dla udanych odpowiedzi GET.
 
-Wdrożenie brokera wiadomości nie jest konieczne, dopóki wystarcza pojedynczy worker, odtwarzalny cache i okresowe odświeżanie.
+### Synchronizacja po zapisie
+
+Zapis jest wykonywany najpierw w nexo. Pełne DTO zwrócone z tej samej sesji Sfery jest następnie używane do aktualizacji SQLite. Dotyczy to tworzenia i aktualizacji produktu lub kontrahenta oraz zmian adresów i kontaktów kontrahenta. Usunięcie produktu usuwa również jego projekcję.
+
+Synchronizacja read modelu jest best-effort. SQLite i nexo nie współdzielą transakcji, więc niepowodzenie lokalnego zapisu nie może zmienić udanej operacji biznesowej w nexo w błąd ani prowokować jej automatycznego ponowienia. Cykliczny worker później naprawia projekcję.
+
+### Polityki i checkpointy
+
+Polityka materializacji określa czas życia, wyprzedzenie odświeżenia, rozmiar batcha, priorytet, źródło kandydatów oraz opcjonalne warunki. Definicje dostępnych polityk są obecnie inicjalizowane z kodu, a ich bieżące wartości oraz checkpointy cykli są utrwalane w SQLite. Jest to etap pośredni przed pełnym konfiguratorem polityk.
+
+Produkty są dzielone na `hot` (`TotalStock > 0`), `cold` (`TotalStock <= 0`) oraz `new`, czyli rekordy obecne w nexo, ale jeszcze nieobecne w read modelu. Kontrahenci są odświeżani pełnymi cyklami z kursorem. Zakończenie pełnego cyklu pozwala usunąć z projekcji kontrahentów, których nie zwróciło już źródło.
+
+Workery są implementowane jako `BackgroundService`, budzą się cyklicznie, wykonują polityki według priorytetu i propagują token zatrzymania hosta. Nie blokują startu endpointu `/health`, lecz współdzielą z ruchem HTTP ten sam `ISferaExecutor` i jego bramkę `SemaphoreSlim(1)`. Nie istnieje jeszcze trwała kolejka priorytetowa ani długowieczna sesja Sfery; każde wejście nadal ponosi koszt utworzenia i zwolnienia uchwytu.
+
+Broker wiadomości nie jest potrzebny, dopóki wystarczają lokalne, odtwarzalne projekcje, checkpointy i workery jednego procesu.
 
 ## Limity i backpressure
 
@@ -239,22 +253,34 @@ Synchroniczne API jest łatwe dla klienta i dobrze pasuje do krótkich operacji.
 
 Dynamiczne pola i flagi pozwalają obsługiwać różne konfiguracje nexo bez wdrażania nowej wersji adaptera. Klient traci jednak część wygody silnego typowania i musi korzystać z zasobu metadanych.
 
-### Cache kontra świeżość
+### Materializacja kontra świeżość
 
-Cache skraca czas odpowiedzi i ogranicza liczbę sesji SDK kosztem kontrolowanego opóźnienia danych. Jawne oznaczenie źródła i czasu pobrania ma zapobiegać ukrywaniu tego kompromisu przed konsumentem.
+Materializowany read model skraca czas odpowiedzi i ogranicza liczbę sesji SDK kosztem kontrolowanego opóźnienia danych. Nagłówki statusu, wieku i czasu ostatniego sukcesu ujawniają ten kompromis bez uzależniania biznesowych DTO od technicznego źródła odczytu.
 
 ### SDK kontra bezpośredni SQL
 
 SDK nakłada koszt wydajnościowy i ograniczenia wykonania, ale zachowuje reguły platformy oraz zmniejsza zależność od schematu bazy. Bezpośrednie zapytania SQL nie są obecnie planowaną ścieżką optymalizacji.
 
+### Granica bezpieczeństwa dla lokalnego agenta AI
+
+Dedykowany scope klucza API ogranicza wyłącznie operacje wykonywane przez API. Nie chroni danych przed lokalnym procesem, który może ominąć API i bezpośrednio odczytać bazę nexo, plik `read-model.db`, konfigurację instancji albo poświadczenia adaptera. Materializowany read model zawiera dane biznesowe i osobowe, dlatego podlega tej samej ochronie co źródłowa baza, mimo że jest odbudowywalną projekcją.
+
+Warstwa AI wymaga więc granicy na poziomie systemu operacyjnego i wdrożenia. Agent powinien działać na osobnym, nieadministracyjnym koncie systemowym, które nie ma loginu do SQL Servera, dostępu do katalogu instancji adaptera, plików SQLite ani poświadczeń Nexo. Konto agenta otrzymuje wyłącznie dedykowany klucz ze scope'em AI i korzysta z anonimizowanych endpointów opartych na jawnej liście dozwolonych pól. Uruchomienie agenta na innej maszynie fizycznej albo w odseparowanej maszynie wirtualnej jest preferowaną granicą, ponieważ dodatkowo ogranicza możliwość odczytu pamięci, plików i lokalnych poświadczeń adaptera.
+
+Agent uruchomiony jako konto adaptera albo lokalny administrator pozostaje poza tym modelem ochrony: może przejąć ACL lub skorzystać z uprawnień procesu niezależnie od scope'ów HTTP. Taka konfiguracja nie może być przedstawiana jako bezpieczna warstwa anonimizująca.
+
 ## Kolejność dalszego rozwoju
 
-1. Dodać pomiary czasu operacji Sfery, oczekiwania oraz błędów blokad.
-2. Wprowadzić jawne limity wejściowe, timeouty i identyfikatory korelacyjne.
-4. Dodać idempotencję dla operacji zapisu.
-5. Wprowadzić cache z metadanymi `live`/`cached` oraz poprawną invalidacją po zapisie.
-6. Dodać prosty worker interwałowy dla kosztownych odczytów w systemach o małym ruchu.
-7. Przejść do kolejki z dedykowanym wątkiem lub osobnego procesu workera tylko po potwierdzeniu wymagań technicznych.
+Pomiary faz wykonania Sfery, timeout kolejki, identyfikatory korelacyjne, trwała idempotencja, materializowany read model, metadane świeżości oraz workery interwałowe są już zaimplementowane.
+
+Następne kroki:
+
+1. Zmaterializować zasoby dokumentowe, zaczynając od nagłówków i pozycji dokumentów.
+2. Zastąpić wielokrotne otwieranie Sfery szeregowaną kolejką priorytetową, która może wykorzystać jedną sesję do wielu operacji i przepuszczać ruch interaktywny przed pracą utrzymaniową.
+3. Udostępnić konfigurator polityk: interwały, wyprzedzenie, priorytety, batch size oraz warunki kwalifikacji rekordów.
+4. Dodać warstwę odczytową przeznaczoną dla integracji AI: osobną grupę anonimizowanych endpointów GET oraz dedykowany scope klucza API ograniczony wyłącznie do tych zasobów. Wdrożenie musi również izolować agenta od bazy nexo, konfiguracji i materializowanego SQLite przez osobne konto systemowe; preferowane jest uruchomienie agenta na innej maszynie fizycznej albo w odseparowanej maszynie wirtualnej. Sam scope API nie stanowi ochrony przed procesem mogącym ominąć API.
+5. Rozszerzać materializację danych referencyjnych wyłącznie tam, gdzie pomiary potwierdzą koszt odczytów live.
+6. Rozważyć dedykowany wątek albo osobny proces wykonawczy dopiero po potwierdzeniu wymagań STA, trwałej kolejki lub niezależnego skalowania.
 
 ## English Summary
 
@@ -269,6 +295,6 @@ Key decisions:
 - expose configurable custom-field and flag metadata separately from entity values,
 - use the official SDK instead of direct SQL access.
 
-The current execution model uses synchronous SDK calls. Concurrency limits, an SDK execution gate and a dedicated worker are evolutionary steps that should be introduced only after measuring real behavior. `SemaphoreSlim` can limit parallel calls but does not guarantee thread affinity; a single-reader queue and dedicated thread remain options if required by Sfera.
+The current execution model uses synchronous SDK calls behind a process-wide `SemaphoreSlim(1)`. Product, party and advanced-field-definition reads are projected into a durable per-instance SQLite read model. Background services refresh policy-selected batches, individual resources use read-through refresh, successful writes update the projection on a best-effort basis, and GET responses expose freshness metadata. SQLite remains rebuildable and nexo remains authoritative.
 
-The planned cache will explicitly identify `live` and `cached` data. Low-traffic installations may use an interval-based refresh worker instead of event infrastructure. Request correlation IDs are intended for diagnostics, while a separate durable `Idempotency-Key` mechanism protects controller POST, PUT, PATCH and DELETE operations against repeated execution.
+A future single-reader priority queue may reuse one Sfera session and protect interactive traffic from maintenance work. The roadmap also includes materialized document resources, a policy configurator and an AI-facing read-only surface with anonymized representations and API-key scopes restricted to that endpoint group. API scopes do not protect data from a local process that can bypass the API, so the AI agent must use a separate, non-administrative OS identity without access to nexo, adapter configuration or materialized SQLite files; a separate physical or virtual machine is preferred. Durable `Idempotency-Key` handling already protects controller POST, PUT, PATCH and DELETE operations against repeated execution.
