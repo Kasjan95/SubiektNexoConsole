@@ -16,20 +16,21 @@ namespace SubiektNexoConnector.Api.Controllers
     public class PartiesContactController : ControllerBase
     {
         [HttpPost]
-        [ProducesResponseType(typeof(PartyContactDto), StatusCodes.Status201Created)]
+        [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status201Created)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public ActionResult<PartyContactDto> Create(
+        public async Task<ActionResult<PartyDetailsDto>> Create(
         string partySignature,
         [FromBody] CreatePartyContactRequestDto request,
-        [FromServices] CreatePartyContactHandler handler)
+        [FromServices] CreatePartyContactHandler handler,
+        CancellationToken cancellationToken)
         {
             CreatePartyContactCommand command = new CreatePartyContactCommand(partySignature, new PartyContactInput(
                 request.ContactTypeId,
                 request.Value,
                 request.IsPrimary,
                 request.Comment));
-            var result = handler.Handle(command);
+            var result = await handler.HandleAsync(command, cancellationToken);
 
             if (result is null)
                 return NotFound();
@@ -38,30 +39,33 @@ namespace SubiektNexoConnector.Api.Controllers
         }
 
         [HttpDelete("{contactId:int}")]
-        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public ActionResult Delete(
+        public async Task<ActionResult<PartyDetailsDto>> Delete(
             string partySignature,
             int contactId,
-            [FromServices] DeletePartyContactHandler handler)
+            [FromServices] DeletePartyContactHandler handler,
+            CancellationToken cancellationToken)
         {
-            if (handler.Handle(new DeletePartyContactCommand(partySignature, contactId)) == DeletePartyResourceResult.NotFound)
+            var party = await handler.HandleAsync(new DeletePartyContactCommand(partySignature, contactId), cancellationToken);
+            if (party is null)
                 return NotFound();
-            return NoContent();
+            return Ok(party);
         }
 
         [HttpPatch("{contactId:int}")]
-        [ProducesResponseType(typeof(PartyContactDto), StatusCodes.Status200OK)]
+        [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status200OK)]
         [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public ActionResult<PartyContactDto> Patch(
+        public async Task<ActionResult<PartyDetailsDto>> Patch(
             string partySignature,
             int contactId,
             [FromBody] PatchPartyContactRequestDto request,
-            [FromServices] PatchPartyContactHandler handler)
+            [FromServices] PatchPartyContactHandler handler,
+            CancellationToken cancellationToken)
         {
             var command = new PatchPartyContactCommand(partySignature, contactId, request.IsPrimary, request.ContactValue, request.ContactDescription);
-            var result = handler.Handle(command);
+            var result = await handler.HandleAsync(command, cancellationToken);
             if (result == null)
                 return NotFound();
             return Ok(result);

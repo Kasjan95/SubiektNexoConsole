@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Text.Json;
 using InsERT.Moria.Narzedzia.PolaWlasne2;
 using InsERT.Moria.PolaWlasne2;
+using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 
 namespace SubiektNexoConnector.Infrastructure.Nexo.Common;
@@ -85,6 +86,17 @@ internal static class NexoAdditionalFieldValueMapper
             .Select(field => new AdditionalFieldValueDto(
                 field.Id,
                 GetAdvancedValue(field, values)))
+            .ToList();
+    }
+
+    public static IReadOnlyCollection<AdditionalFieldValueDto> MapAdvanced(IEnumerable<AdvancedFieldDefinitionDto> definitions, IPolaWlasneAdv2Accessor values)
+    {
+        ArgumentNullException.ThrowIfNull(definitions);
+        ArgumentNullException.ThrowIfNull(values);
+
+        return definitions
+            .Where(definition => definition.Visible)
+            .Select(definition => new AdditionalFieldValueDto(definition.Id, GetAdvancedValue(definition, values)))
             .ToList();
     }
 
@@ -333,6 +345,22 @@ internal static class NexoAdditionalFieldValueMapper
         };
     }
 
+    private static object? GetAdvancedValue(AdvancedFieldDefinitionDto field, IPolaWlasneAdv2Accessor values)
+    {
+        if (field.Dictionary is not null)
+            return GetDictionaryKey(field, values);
+
+        return field.DataType switch
+        {
+            AdvancedFieldDataType.Text or AdvancedFieldDataType.LongText => values.PobierzWartoscTypuTekst(field.Name),
+            AdvancedFieldDataType.Integer => values.PobierzWartoscTypuLiczbaCalkowita(field.Name),
+            AdvancedFieldDataType.Decimal => values.PobierzWartoscTypuLiczbaRzeczywista(field.Name),
+            AdvancedFieldDataType.Boolean => values.PobierzWartoscTypuLogicznego(field.Name),
+            AdvancedFieldDataType.Date => values.PobierzWartoscTypuData(field.Name),
+            _ => throw new NotSupportedException($"Unsupported advanced field type for '{field.Id}': {field.DataType}.")
+        };
+    }
+
     private static object? GetDictionaryKey(
         IZaawansowanePoleWlasne field,
         IPolaWlasneAdv2Accessor values) => field.RodzajSlownika switch
@@ -357,4 +385,24 @@ internal static class NexoAdditionalFieldValueMapper
             _ => throw new NotSupportedException(
                 $"Unsupported advanced field dictionary: {field.RodzajSlownika}.")
         };
+
+    private static object? GetDictionaryKey(AdvancedFieldDefinitionDto field, IPolaWlasneAdv2Accessor values)
+    {
+        var dictionary = field.Dictionary ?? throw new InvalidOperationException($"Advanced field '{field.Id}' has no dictionary definition.");
+
+        return dictionary.Kind switch
+        {
+            AdvancedFieldDictionaryKind.Custom => values.PobierzWartoscTypuSlownikWlasny2(field.Name),
+            AdvancedFieldDictionaryKind.CustomSql when IsIntegerKey(dictionary.KeyType) => values.PobierzWartoscTypuSlownikWlasnySqlByInt2(field.Name),
+            AdvancedFieldDictionaryKind.CustomSql when IsGuidKey(dictionary.KeyType) => values.PobierzWartoscTypuSlownikWlasnySqlByGuid2(field.Name),
+            AdvancedFieldDictionaryKind.System when dictionary.SystemDictionary == "currencies" => values.PobierzWartoscTypuSlownikSystemowyWalut2(field.Name),
+            AdvancedFieldDictionaryKind.System when dictionary.SystemDictionary == "warehouses" => values.PobierzWartoscTypuSlownikSystemowyMagazynow2(field.Name),
+            AdvancedFieldDictionaryKind.System when dictionary.SystemDictionary == "bank-accounts" => values.PobierzWartoscTypuSlownikSystemowyRachunkowBankowych2(field.Name),
+            _ => throw new NotSupportedException($"Unsupported dictionary for advanced field '{field.Id}': {dictionary.Kind}, {dictionary.KeyType}, {dictionary.SystemDictionary}.")
+        };
+    }
+
+    private static bool IsIntegerKey(string keyType) => keyType.Equals("int", StringComparison.OrdinalIgnoreCase) || keyType.Equals("System.Int32", StringComparison.Ordinal);
+
+    private static bool IsGuidKey(string keyType) => keyType.Equals("guid", StringComparison.OrdinalIgnoreCase) || keyType.Equals("System.Guid", StringComparison.Ordinal);
 }

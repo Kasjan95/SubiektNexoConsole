@@ -4,6 +4,8 @@ using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
+using SubiektNexoConnector.Api.Materialization;
+using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Parties.Addresses.Shared;
 using SubiektNexoConnector.Core.Application.Parties.CreateParty;
@@ -30,6 +32,20 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     {
         _factory = factory;
         _client = factory.CreateBusinessClient();
+    }
+
+    [Fact]
+    public async Task GetParties_Returns503_WhenInitialMaterializationHasNotCompleted()
+    {
+        _factory.Parties.ClearReceivedCalls();
+
+        var response = await _client.GetAsync("/parties");
+
+        response.StatusCode.Should().Be(HttpStatusCode.ServiceUnavailable);
+        response.Headers.GetValues(MaterializationMetadataMiddleware.StatusHeaderName).Single().Should().Be("unavailable");
+        response.Headers.Contains(MaterializationMetadataMiddleware.AgeSecondsHeaderName).Should().BeFalse();
+        response.Headers.Contains(MaterializationMetadataMiddleware.LastSuccessAtHeaderName).Should().BeFalse();
+        _factory.Parties.DidNotReceive().GetAllParties(Arg.Any<GetPartiesQuery>());
     }
 
     [Fact]
@@ -68,22 +84,23 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     [Fact]
     public async Task GetPartyDetails_Returns404_WhenPartyDoesNotExist()
     {
-        _factory.Parties.GetDetailsParty(Arg.Any<GetPartyDetailsQuery>()).Returns((PartyDetailsDto?)null);
+        _factory.Parties.GetDetailsForMaterialization("MISSING", Arg.Any<IReadOnlyCollection<AdvancedFieldDefinitionDto>>(), Arg.Any<CancellationToken>()).Returns((PartyDetailsDto?)null);
 
         var response = await _client.GetAsync("/parties/MISSING");
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        AssertFreshMaterializationHeaders(response);
     }
 
     [Fact]
     public async Task GetPartyDetails_Returns200AndJsonBody()
     {
         var party = new PartyDetailsDto(
+            Id: 1,
             Signature: "PARTY-001",
             DisplayName: "Test party",
             IsActive: true,
-            TypeName: "organization",
-            SubtypeName: "company",
+            Classification: new PartyClassificationDto(2, "Firma", 11, "Firma", 0, "Standardowy"),
             FirstName: null,
             LastName: null,
             CompanyName: "Test party Ltd.",
@@ -102,11 +119,12 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
             Contacts: Array.Empty<PartyContactDto>(),
             TradeCreditLimit: CreateTradeCreditLimit());
 
-        _factory.Parties.GetDetailsParty(Arg.Any<GetPartyDetailsQuery>()).Returns(party);
+        _factory.Parties.GetDetailsForMaterialization(party.Signature, Arg.Any<IReadOnlyCollection<AdvancedFieldDefinitionDto>>(), Arg.Any<CancellationToken>()).Returns(party);
 
         var response = await _client.GetAsync($"/parties/{party.Signature}");
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
+        AssertFreshMaterializationHeaders(response);
         var body = await response.Content.ReadFromJsonAsync<PartyDetailsDto>();
         body.Should().BeEquivalentTo(party);
     }
@@ -114,6 +132,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     [Fact]
     public async Task PatchParty_Returns200AndJsonBody_WhenPartyWasUpdated()
     {
+        var party = CreatePartyDetails("PARTY-002");
         _factory.Parties
             .PatchParty(Arg.Is<PatchPartyCommand>(command =>
                 command.PartySignature == "PARTY-001" &&
@@ -121,7 +140,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
                 command.Signature.Value == "PARTY-002" &&
                 command.Notes.HasValue &&
                 command.Notes.Value == null))
-            .Returns("PARTY-002");
+            .Returns(party);
 
         var response = await _client.PatchAsJsonAsync(
             "/parties/PARTY-001",
@@ -132,8 +151,8 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
             });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<PatchPartyResponseDto>();
-        body.Should().BeEquivalentTo(new PatchPartyResponseDto("PARTY-002"));
+        var body = await response.Content.ReadFromJsonAsync<PartyDetailsDto>();
+        body.Should().BeEquivalentTo(party);
     }
 
     [Fact]
@@ -151,9 +170,10 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
             CountryId: 1,
             AddressTypeName: "Korespondencyjny",
             AddressTypeId: 2);
+        var party = CreatePartyDetails("PARTY-001") with { Addresses = [address] };
         _factory.Parties
             .CreatePartyAddress(Arg.Any<CreatePartyAddressCommand>())
-            .Returns(new CreatePartyAddressResult(address, IsCreated: true));
+            .Returns(new CreatePartyAddressResult(party, IsCreated: true));
 
         var response = await _client.PostAsJsonAsync(
             "/parties/PARTY-001/addresses",
@@ -166,8 +186,8 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
             });
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        var body = await response.Content.ReadFromJsonAsync<PartyAddressDto>();
-        body.Should().BeEquivalentTo(address);
+        var body = await response.Content.ReadFromJsonAsync<PartyDetailsDto>();
+        body.Should().BeEquivalentTo(party);
         _factory.Parties.Received(1).CreatePartyAddress(Arg.Is<CreatePartyAddressCommand>(command =>
             command.PartySignature == "PARTY-001" &&
             command.Address.AddressTypeId == 2));
@@ -188,9 +208,10 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
             CountryId: 1,
             AddressTypeName: "Główny",
             AddressTypeId: 1);
+        var party = CreatePartyDetails("PARTY-001") with { Addresses = [address] };
         _factory.Parties
             .CreatePartyAddress(Arg.Any<CreatePartyAddressCommand>())
-            .Returns(new CreatePartyAddressResult(address, IsCreated: false));
+            .Returns(new CreatePartyAddressResult(party, IsCreated: false));
 
         var response = await _client.PostAsJsonAsync(
             "/parties/PARTY-001/addresses",
@@ -203,8 +224,8 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
             });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<PartyAddressDto>();
-        body.Should().BeEquivalentTo(address);
+        var body = await response.Content.ReadFromJsonAsync<PartyDetailsDto>();
+        body.Should().BeEquivalentTo(party);
     }
 
     [Fact]
@@ -247,6 +268,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
             CountryId: 1,
             AddressTypeName: "Główny",
             AddressTypeId: 1);
+        var party = CreatePartyDetails("PARTY-001") with { Addresses = [address] };
         _factory.Parties
             .PatchPartyAddress(Arg.Is<PatchPartyAddressCommand>(command =>
                 command.PartySignature == "PARTY-001" &&
@@ -255,7 +277,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
                 command.PostalCode.Value == "00-001" &&
                 command.CountryId.HasValue &&
                 command.CountryId.Value == 1))
-            .Returns(address);
+            .Returns(party);
 
         var response = await _client.PatchAsJsonAsync(
             "/parties/PARTY-001/addresses/123",
@@ -266,14 +288,14 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
             });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var body = await response.Content.ReadFromJsonAsync<PartyAddressDto>();
-        body.Should().BeEquivalentTo(address);
+        var body = await response.Content.ReadFromJsonAsync<PartyDetailsDto>();
+        body.Should().BeEquivalentTo(party);
     }
 
     [Fact]
     public async Task PatchPartyAddress_Returns404_WhenAddressDoesNotExist()
     {
-        _factory.Parties.PatchPartyAddress(Arg.Any<PatchPartyAddressCommand>()).Returns((PartyAddressDto?)null);
+        _factory.Parties.PatchPartyAddress(Arg.Any<PatchPartyAddressCommand>()).Returns((PartyDetailsDto?)null);
 
         var response = await _client.PatchAsJsonAsync(
             "/parties/PARTY-001/addresses/999",
@@ -291,22 +313,24 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
-    public async Task DeletePartyAddress_Returns204_WhenAddressWasDeleted()
+    public async Task DeletePartyAddress_Returns200WithUpdatedParty_WhenAddressWasDeleted()
     {
+        var party = CreatePartyDetails("PARTY-001");
         _factory.Parties.DeletePartyAddress(Arg.Is<DeletePartyAddressCommand>(command =>
                 command.PartySignature == "PARTY-001" && command.AddressId == 123))
-            .Returns(DeletePartyResourceResult.Deleted);
+            .Returns(party);
 
         var response = await _client.DeleteAsync("/parties/PARTY-001/addresses/123");
 
-        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await response.Content.ReadFromJsonAsync<PartyDetailsDto>()).Should().BeEquivalentTo(party);
     }
 
     [Fact]
     public async Task DeletePartyAddress_Returns404_WhenAddressDoesNotExist()
     {
         _factory.Parties.DeletePartyAddress(Arg.Any<DeletePartyAddressCommand>())
-            .Returns(DeletePartyResourceResult.NotFound);
+            .Returns((PartyDetailsDto?)null);
 
         var response = await _client.DeleteAsync("/parties/PARTY-001/addresses/999");
 
@@ -333,6 +357,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     public async Task CreatePartyContact_Returns201AndForwardsValidatedInput()
     {
         var contact = new PartyContactDto(123, true, 3, "E-mail", "contact@example.com", "Sales");
+        var party = CreatePartyDetails("PARTY-001") with { Contacts = [contact] };
         _factory.Parties
             .CreatePartyContact(Arg.Is<CreatePartyContactCommand>(command =>
                 command.PartySignature == "PARTY-001" &&
@@ -340,20 +365,20 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
                 command.Contact.Value == "contact@example.com" &&
                 command.Contact.IsPrimary &&
                 command.Contact.Comment == "Sales"))
-            .Returns(contact);
+            .Returns(party);
 
         var response = await _client.PostAsJsonAsync(
             "/parties/PARTY-001/contacts",
             new { ContactTypeId = 3, Value = "contact@example.com", IsPrimary = true, Comment = "Sales" });
 
         response.StatusCode.Should().Be(HttpStatusCode.Created);
-        (await response.Content.ReadFromJsonAsync<PartyContactDto>()).Should().BeEquivalentTo(contact);
+        (await response.Content.ReadFromJsonAsync<PartyDetailsDto>()).Should().BeEquivalentTo(party);
     }
 
     [Fact]
     public async Task CreatePartyContact_Returns404_WhenPartyDoesNotExist()
     {
-        _factory.Parties.CreatePartyContact(Arg.Any<CreatePartyContactCommand>()).Returns((PartyContactDto?)null);
+        _factory.Parties.CreatePartyContact(Arg.Any<CreatePartyContactCommand>()).Returns((PartyDetailsDto?)null);
 
         var response = await _client.PostAsJsonAsync(
             "/parties/MISSING/contacts",
@@ -379,6 +404,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     public async Task PatchPartyContact_Returns200AndNormalizesTextFields()
     {
         var contact = new PartyContactDto(123, false, 3, "E-mail", "contact@example.com", null);
+        var party = CreatePartyDetails("PARTY-001") with { Contacts = [contact] };
         _factory.Parties
             .PatchPartyContact(Arg.Is<PatchPartyContactCommand>(command =>
                 command.PartySignature == "PARTY-001" &&
@@ -386,14 +412,14 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
                 command.IsPrimary.HasValue && !command.IsPrimary.Value &&
                 command.ContactValue.HasValue && command.ContactValue.Value == "contact@example.com" &&
                 command.ContactDescription.HasValue && command.ContactDescription.Value == null))
-            .Returns(contact);
+            .Returns(party);
 
         var response = await _client.PatchAsJsonAsync(
             "/parties/PARTY-001/contacts/123",
             new { IsPrimary = false, ContactValue = "  contact@example.com  ", ContactDescription = "  " });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await response.Content.ReadFromJsonAsync<PartyContactDto>()).Should().BeEquivalentTo(contact);
+        (await response.Content.ReadFromJsonAsync<PartyDetailsDto>()).Should().BeEquivalentTo(party);
     }
 
     [Fact]
@@ -410,7 +436,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     [Fact]
     public async Task PatchPartyContact_Returns404_WhenContactDoesNotExist()
     {
-        _factory.Parties.PatchPartyContact(Arg.Any<PatchPartyContactCommand>()).Returns((PartyContactDto?)null);
+        _factory.Parties.PatchPartyContact(Arg.Any<PatchPartyContactCommand>()).Returns((PartyDetailsDto?)null);
 
         var response = await _client.PatchAsJsonAsync(
             "/parties/PARTY-001/contacts/999",
@@ -420,16 +446,18 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     }
 
     [Fact]
-    public async Task DeletePartyContact_UsesContactIdRouteParameterAndReturns204()
+    public async Task DeletePartyContact_UsesContactIdRouteParameterAndReturnsUpdatedParty()
     {
+        var party = CreatePartyDetails("PARTY-001");
         _factory.Parties
             .DeletePartyContact(Arg.Is<DeletePartyContactCommand>(command =>
                 command.PartySignature == "PARTY-001" && command.ContactId == 123))
-            .Returns(DeletePartyResourceResult.Deleted);
+            .Returns(party);
 
         var response = await _client.DeleteAsync("/parties/PARTY-001/contacts/123");
 
-        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        (await response.Content.ReadFromJsonAsync<PartyDetailsDto>()).Should().BeEquivalentTo(party);
     }
 
     [Fact]
@@ -449,7 +477,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
                 command.IndustryIds.Value!.Count == 0 &&
                 command.FeatureIds.HasValue &&
                 command.FeatureIds.Value!.Count == 0))
-            .Returns("PARTY-001");
+            .Returns(CreatePartyDetails("PARTY-001"));
 
         var response = await _client.PatchAsJsonAsync(
             "/parties/PARTY-001",
@@ -473,7 +501,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
                 command.AdvancedFields.Value!.Single().Id == "D0" &&
                 command.Flag.HasValue &&
                 command.Flag.Value == new SubiektNexoConnector.Core.Application.Common.FlagAssignmentDto(2, "Important")))
-            .Returns("PARTY-001");
+            .Returns(CreatePartyDetails("PARTY-001"));
 
         var response = await _client.PatchAsJsonAsync(
             "/parties/PARTY-001",
@@ -511,7 +539,7 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
     [Fact]
     public async Task PatchParty_Returns404_WhenPartyDoesNotExist()
     {
-        _factory.Parties.PatchParty(Arg.Any<PatchPartyCommand>()).Returns((string?)null);
+        _factory.Parties.PatchParty(Arg.Any<PatchPartyCommand>()).Returns((PartyDetailsDto?)null);
 
         var response = await _client.PatchAsJsonAsync(
             "/parties/MISSING",
@@ -529,4 +557,35 @@ public class PartiesHttpTests : IClassFixture<TestApiFactory>
         Sales: new DocumentTradeCreditLimitDto(true, 5000m, 100m, 0m),
         GoodsIssue: new DocumentTradeCreditLimitDto(false, null, null, null),
         Order: new DocumentTradeCreditLimitDto(true, 5000m, 100m, 0m));
+
+    private static PartyDetailsDto CreatePartyDetails(string signature) => new(
+        Id: 1,
+        Signature: signature,
+        DisplayName: "Test party",
+        IsActive: true,
+        Classification: new PartyClassificationDto(2, "Firma", 11, "Firma", 0, "Standardowy"),
+        FirstName: null,
+        LastName: null,
+        CompanyName: "Test party Ltd.",
+        TaxId: "1234567890",
+        EuTaxId: null,
+        BusinessRegistryNumber: null,
+        NationalCourtRegisterNumber: null,
+        PartyGroup: null,
+        Industries: [],
+        Features: [],
+        Notes: null,
+        Flag: null,
+        BasicFields: [],
+        AdvancedFields: [],
+        Addresses: [],
+        Contacts: [],
+        TradeCreditLimit: CreateTradeCreditLimit());
+
+    private static void AssertFreshMaterializationHeaders(HttpResponseMessage response)
+    {
+        response.Headers.GetValues(MaterializationMetadataMiddleware.StatusHeaderName).Single().Should().Be("fresh");
+        long.Parse(response.Headers.GetValues(MaterializationMetadataMiddleware.AgeSecondsHeaderName).Single()).Should().BeInRange(0, 60);
+        DateTime.Parse(response.Headers.GetValues(MaterializationMetadataMiddleware.LastSuccessAtHeaderName).Single(), null, System.Globalization.DateTimeStyles.RoundtripKind).Kind.Should().Be(DateTimeKind.Utc);
+    }
 }

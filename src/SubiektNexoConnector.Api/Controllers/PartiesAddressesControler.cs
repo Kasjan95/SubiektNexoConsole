@@ -16,14 +16,15 @@ namespace SubiektNexoConnector.Api.Controllers;
 public class PartiesAddressesControler : ControllerBase
 {
     [HttpPost]
-    [ProducesResponseType(typeof(PartyAddressDto), StatusCodes.Status201Created)]
-    [ProducesResponseType(typeof(PartyAddressDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<PartyAddressDto> Create(
+    public async Task<ActionResult<PartyDetailsDto>> Create(
         string partySignature,
         [FromBody] CreatePartyAddressRequestDto request,
-        [FromServices] CreatePartyAddressHandler handler)
+        [FromServices] CreatePartyAddressHandler handler,
+        CancellationToken cancellationToken)
     {
         CreatePartyAddressCommand command = new CreatePartyAddressCommand(partySignature, new PartyAddressInput(
             request.AddressTypeId,
@@ -33,27 +34,28 @@ public class PartiesAddressesControler : ControllerBase
             request.PostalCode,
             request.City,
             request.CountryId));
-        var result = handler.Handle(command);
+        var result = await handler.HandleAsync(command, cancellationToken);
 
         if (result is null)
             return NotFound();
 
         return result.IsCreated
-            ? StatusCode(StatusCodes.Status201Created, result.Address)
-            : Ok(result.Address);
+            ? StatusCode(StatusCodes.Status201Created, result.Party)
+            : Ok(result.Party);
     }
 
     [HttpPatch("{addressId:int}")]
-    [ProducesResponseType(typeof(PartyAddressDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<PartyAddressDto> Patch(
+    public async Task<ActionResult<PartyDetailsDto>> Patch(
         string partySignature,
         int addressId,
         [FromBody] PatchPartyAddressRequestDto request,
-        [FromServices] PatchPartyAddressHandler handler)
+        [FromServices] PatchPartyAddressHandler handler,
+        CancellationToken cancellationToken)
     {
-        var result = handler.Handle(new PatchPartyAddressCommand(
+        var result = await handler.HandleAsync(new PatchPartyAddressCommand(
             partySignature,
             addressId,
             request.Street,
@@ -62,7 +64,7 @@ public class PartiesAddressesControler : ControllerBase
             request.PostalCode,
             request.City,
             request.CountryId
-        ));
+        ), cancellationToken);
 
         if (result is null)
             return NotFound();
@@ -71,15 +73,17 @@ public class PartiesAddressesControler : ControllerBase
     }
 
     [HttpDelete("{addressId:int}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult Delete(
+    public async Task<ActionResult<PartyDetailsDto>> Delete(
         string partySignature,
         int addressId,
-        [FromServices] DeletePartyAddressHandler handler)
+        [FromServices] DeletePartyAddressHandler handler,
+        CancellationToken cancellationToken)
     {
-        if (handler.Handle(new DeletePartyAddressCommand(partySignature, addressId)) == DeletePartyResourceResult.NotFound)
+        var party = await handler.HandleAsync(new DeletePartyAddressCommand(partySignature, addressId), cancellationToken);
+        if (party is null)
             return NotFound();
-        return NoContent();
+        return Ok(party);
     }
 }

@@ -8,6 +8,7 @@ using SubiektNexoConnector.Core.Application.AdditionalFields.GetBasicFieldDefini
 using SubiektNexoConnector.Core.Application.AdditionalFields.GetFlagDefinitions;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Materialization;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
+using SubiektNexoConnector.Core.Application.Parties;
 using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
@@ -28,6 +29,7 @@ using SubiektNexoConnector.Infrastructure.Materialization.Persistence;
 using SubiektNexoConnector.Infrastructure.Materialization.Persistence.Policies;
 using SubiektNexoConnector.Infrastructure.Materialization.Persistence.States;
 using SubiektNexoConnector.Infrastructure.Materialization.AdditionalFields;
+using SubiektNexoConnector.Infrastructure.Materialization.Parties;
 using SubiektNexoConnector.Infrastructure.Materialization.Products;
 using SubiektNexoConnector.Infrastructure.Nexo;
 
@@ -80,6 +82,11 @@ public static class DependencyInjection
 
         services.AddDbContext<ReadModelDbContext>(options => options.UseSqlite(readModelConnectionString));
         services.AddScoped<IProductReadModelWriter, ProductReadModelWriter>();
+        services.AddScoped<IPartyReadModelWriter, PartyReadModelWriter>();
+        services.AddScoped<IPartyReadModelReader, PartyReadModelReader>();
+        services.AddScoped<IPartyReadModelSynchronizer, PartyReadModelSynchronizer>();
+        services.AddScoped<IPartyMaterializationRefresher, PartyMaterializationRefresher>();
+        services.AddScoped<IMaterializationFreshnessEvaluator, MaterializationFreshnessEvaluator>();
         services.AddScoped<IProductReadModelReader, ProductReadModelReader>();
         services.AddScoped<IProductReadModelSynchronizer, ProductReadModelSynchronizer>();
         services.AddScoped<IAdvancedFieldDefinitionsReadModelReader, AdvancedFieldDefinitionsReadModelReader>();

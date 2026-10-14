@@ -44,6 +44,16 @@ public static class MaterializationPolicyDefinitions
         MaterializationCandidateSelection.MissingFromReadModel,
         []);
 
+    public static readonly MaterializationPolicyDefinition Parties = new(
+        "parties.all",
+        "Party details",
+        150,
+        1800,
+        90,
+        100,
+        MaterializationCandidateSelection.SourceSystem,
+        []);
+
     public static readonly MaterializationPolicyDefinition AdvancedFieldDefinitionsProduct = new(
         "additional-field-definitions.advanced.product",
         "Product advanced field definitions",

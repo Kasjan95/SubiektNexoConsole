@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using SubiektNexoConnector.Api.Configuration;
+using SubiektNexoConnector.Api.Materialization;
 using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
@@ -18,11 +19,12 @@ public class PartiesController : ControllerBase
     [HttpPost]
     [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
-    public ActionResult<PartyDetailsDto> Create(
+    public async Task<ActionResult<PartyDetailsDto>> Create(
         [FromBody] CreatePartyRequestDto request,
-        [FromServices] CreatePartyHandler handler)
+        [FromServices] CreatePartyHandler handler,
+        CancellationToken cancellationToken)
     {
-        var party = handler.Handle(new CreatePartyCommand(
+        var party = await handler.HandleAsync(new CreatePartyCommand(
             request.DisplayName,
             request.Type!.Value,
             request.Subtype!.Value,
@@ -50,7 +52,7 @@ public class PartiesController : ControllerBase
                 contact.ContactTypeId,
                 contact.Value,
                 contact.IsPrimary,
-                contact.Comment)).ToArray() ?? Array.Empty<PartyContactInput>()));
+                contact.Comment)).ToArray() ?? Array.Empty<PartyContactInput>()), cancellationToken);
 
         return CreatedAtAction(
             nameof(GetDetails),
@@ -61,28 +63,35 @@ public class PartiesController : ControllerBase
     [HttpGet]
     [ProducesResponseType(typeof(IReadOnlyCollection<PartyBasicDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    public ActionResult<IReadOnlyCollection<PartyBasicDto>> GetAll(
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public async Task<ActionResult<IReadOnlyCollection<PartyBasicDto>>> GetAll(
         [FromServices] GetPartiesHandler handler,
         [FromQuery] PartyCustomerStatusFilter customerStatus = PartyCustomerStatusFilter.Standard,
         [FromQuery] short? type = null,
         [FromQuery] string? search = null,
         [FromQuery] int? page = null,
         [FromQuery] int? pageSize = null,
-        [FromServices] PaginationOptions? paginationOptions = null)
+        [FromServices] PaginationOptions? paginationOptions = null,
+        CancellationToken cancellationToken = default)
     {
         var pagination = paginationOptions ?? new PaginationOptions();
         if (!pagination.TryResolve(page, pageSize, out var parameters, out var errors))
             return ValidationProblem(new ValidationProblemDetails(errors));
 
-        var result = handler.Handle(new GetPartiesQuery
+        var result = await handler.HandleAsync(new GetPartiesQuery
         {
             CustomerStatus = customerStatus,
             Type = type,
             Search = search,
             Page = parameters.Page,
             PageSize = parameters.PageSize
-        });
-        return Ok(result);
+        }, cancellationToken);
+
+        HttpContext.SetMaterializationMetadata(result.Metadata);
+        if (result.Value is null)
+            return StatusCode(StatusCodes.Status503ServiceUnavailable);
+
+        return Ok(result.Value);
     }
 
     [HttpGet("create-options")]
@@ -92,28 +101,31 @@ public class PartiesController : ControllerBase
     [HttpGet("{partySignature}")]
     [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<PartyDetailsDto> GetDetails(
+    public async Task<ActionResult<PartyDetailsDto>> GetDetails(
         string partySignature,
-        [FromServices] GetPartyDetailsHandler handler)
+        [FromServices] GetPartyDetailsHandler handler,
+        CancellationToken cancellationToken)
     {
-        var result = handler.Handle(new GetPartyDetailsQuery(partySignature));
+        var result = await handler.HandleAsync(new GetPartyDetailsQuery(partySignature), cancellationToken);
+        HttpContext.SetMaterializationMetadata(result.Metadata);
 
-        if (result is null)
+        if (result.Value is null)
             return NotFound();
 
-        return Ok(result);
+        return Ok(result.Value);
     }
 
     [HttpPatch("{partySignature}")]
-    [ProducesResponseType(typeof(PatchPartyResponseDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(PartyDetailsDto), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public ActionResult<PatchPartyResponseDto> Patch(
+    public async Task<ActionResult<PartyDetailsDto>> Patch(
         string partySignature,
         [FromBody] PatchPartyRequestDto request,
-        [FromServices] PatchPartyHandler handler)
+        [FromServices] PatchPartyHandler handler,
+        CancellationToken cancellationToken)
     {
-        var updatedSignature = handler.Handle(new PatchPartyCommand(
+        var party = await handler.HandleAsync(new PatchPartyCommand(
             partySignature,
             request.Signature,
             request.DisplayName,
@@ -131,11 +143,11 @@ public class PartiesController : ControllerBase
             request.Notes,
             request.BasicFields,
             request.AdvancedFields,
-            request.Flag));
+            request.Flag), cancellationToken);
 
-        if (updatedSignature is null)
+        if (party is null)
             return NotFound();
 
-        return Ok(new PatchPartyResponseDto(updatedSignature));
+        return Ok(party);
     }
 }

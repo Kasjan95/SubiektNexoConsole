@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using NSubstitute;
 using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
@@ -7,54 +8,64 @@ using SubiektNexoConnector.Core.Application.Parties.PatchParty;
 using SubiektNexoConnector.Core.Application.Parties.Shared;
 using SubiektNexoConnector.Core.Application.Parties.Addresses.Shared;
 using SubiektNexoConnector.Core.Application.Parties.Contacts.Shared;
+using SubiektNexoConnector.Core.Application.Parties;
+using SubiektNexoConnector.Core.Materialization;
 
 namespace SubiektNexoConnector.Api.Tests.Controllers.Parties;
 
 public class PartiesControllerTests
 {
     [Fact]
-    public void GetDetails_ReturnsOkWithParty_WhenPartyExists()
+    public async Task GetDetails_ReturnsOkWithParty_WhenPartyExists()
     {
-        var repository = Substitute.For<IPartyRepository>();
+        var reader = Substitute.For<IPartyReadModelReader>();
+        var refresher = Substitute.For<IPartyMaterializationRefresher>();
+        var freshnessEvaluator = Substitute.For<IMaterializationFreshnessEvaluator>();
         var party = CreatePartyDetails();
-        repository.GetDetailsParty(Arg.Any<GetPartyDetailsQuery>()).Returns(party);
+        var refreshedAtUtc = DateTime.UtcNow;
+        reader.GetDetailsAsync(party.Signature, Arg.Any<CancellationToken>()).Returns(new MaterializedPartyDetails(party, refreshedAtUtc));
+        freshnessEvaluator.EvaluateAsync(MaterializationPolicyDefinitions.Parties, refreshedAtUtc, Arg.Any<CancellationToken>()).Returns(new MaterializationMetadata(MaterializationStatus.Fresh, refreshedAtUtc));
 
-        var controller = new PartiesController();
-        var result = controller.GetDetails(party.Signature, new GetPartyDetailsHandler(repository));
+        var controller = CreateController();
+        var result = await controller.GetDetails(party.Signature, new GetPartyDetailsHandler(reader, refresher, freshnessEvaluator), CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
         Assert.Equal(party, okResult.Value);
-        repository.Received(1).GetDetailsParty(
-            Arg.Is<GetPartyDetailsQuery>(query => query.PartySignature == party.Signature));
+        await reader.Received(1).GetDetailsAsync(party.Signature, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public void GetDetails_ReturnsNotFound_WhenPartyDoesNotExist()
+    public async Task GetDetails_ReturnsNotFound_WhenPartyDoesNotExist()
     {
-        var repository = Substitute.For<IPartyRepository>();
+        var reader = Substitute.For<IPartyReadModelReader>();
+        var refresher = Substitute.For<IPartyMaterializationRefresher>();
+        var freshnessEvaluator = Substitute.For<IMaterializationFreshnessEvaluator>();
         const string signature = "MISSING";
-        repository.GetDetailsParty(Arg.Any<GetPartyDetailsQuery>()).Returns((PartyDetailsDto?)null);
+        reader.GetDetailsAsync(signature, Arg.Any<CancellationToken>()).Returns((MaterializedPartyDetails?)null);
 
-        var controller = new PartiesController();
-        var result = controller.GetDetails(signature, new GetPartyDetailsHandler(repository));
+        var controller = CreateController();
+        var result = await controller.GetDetails(signature, new GetPartyDetailsHandler(reader, refresher, freshnessEvaluator), CancellationToken.None);
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
 
     [Fact]
-    public void Patch_ReturnsUpdatedSignature_WhenPartyExists()
+    public async Task Patch_ReturnsUpdatedParty_WhenPartyExists()
     {
         var repository = Substitute.For<IPartyRepository>();
+        var synchronizer = Substitute.For<IPartyReadModelSynchronizer>();
         var request = new PatchPartyRequestDto(Signature: new("PARTY-002"));
-        repository.PatchParty(Arg.Any<PatchPartyCommand>()).Returns("PARTY-002");
+        var party = CreatePartyDetails() with { Signature = "PARTY-002" };
+        repository.PatchParty(Arg.Any<PatchPartyCommand>()).Returns(party);
 
-        var result = new PartiesController().Patch(
+        var result = await new PartiesController().Patch(
             "PARTY-001",
             request,
-            new PatchPartyHandler(repository));
+            new PatchPartyHandler(repository, synchronizer),
+            CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(result.Result);
-        Assert.Equal(new PatchPartyResponseDto("PARTY-002"), okResult.Value);
+        Assert.Equal(party, okResult.Value);
         repository.Received(1).PatchParty(Arg.Is<PatchPartyCommand>(command =>
             command.PartySignature == "PARTY-001" &&
             command.Signature.HasValue &&
@@ -62,15 +73,17 @@ public class PartiesControllerTests
     }
 
     [Fact]
-    public void Patch_ReturnsNotFound_WhenPartyDoesNotExist()
+    public async Task Patch_ReturnsNotFound_WhenPartyDoesNotExist()
     {
         var repository = Substitute.For<IPartyRepository>();
-        repository.PatchParty(Arg.Any<PatchPartyCommand>()).Returns((string?)null);
+        var synchronizer = Substitute.For<IPartyReadModelSynchronizer>();
+        repository.PatchParty(Arg.Any<PatchPartyCommand>()).Returns((PartyDetailsDto?)null);
 
-        var result = new PartiesController().Patch(
+        var result = await new PartiesController().Patch(
             "MISSING",
             new PatchPartyRequestDto(Notes: new("Updated note")),
-            new PatchPartyHandler(repository));
+            new PatchPartyHandler(repository, synchronizer),
+            CancellationToken.None);
 
         Assert.IsType<NotFoundResult>(result.Result);
     }
@@ -78,11 +91,11 @@ public class PartiesControllerTests
     private static PartyDetailsDto CreatePartyDetails()
     {
         return new PartyDetailsDto(
+            Id: 1,
             Signature: "PARTY-001",
             DisplayName: "Test party",
             IsActive: true,
-            TypeName: "organization",
-            SubtypeName: "company",
+            Classification: new PartyClassificationDto(2, "Firma", 11, "Firma", 0, "Standardowy"),
             FirstName: null,
             LastName: null,
             CompanyName: "Test party Ltd.",
@@ -111,4 +124,9 @@ public class PartiesControllerTests
         Sales: new DocumentTradeCreditLimitDto(true, 5000m, 100m, 0m),
         GoodsIssue: new DocumentTradeCreditLimitDto(false, null, null, null),
         Order: new DocumentTradeCreditLimitDto(true, 5000m, 100m, 0m));
+
+    private static PartiesController CreateController() => new()
+    {
+        ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
+    };
 }

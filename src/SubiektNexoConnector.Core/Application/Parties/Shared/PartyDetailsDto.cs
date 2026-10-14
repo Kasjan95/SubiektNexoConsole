@@ -6,12 +6,11 @@
     using SubiektNexoConnector.Core.Application.Parties.Contacts.Shared;
 
     public sealed record PartyDetailsDto(
+        int Id,
         string Signature,
         string DisplayName,
         bool IsActive,
-
-        string TypeName,
-        string SubtypeName,
+        PartyClassificationDto Classification,
 
         string? FirstName,
         string? LastName,

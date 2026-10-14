@@ -3,14 +3,10 @@ using SubiektNexoConnector.Core.Application.Common;
 namespace SubiektNexoConnector.Core.Application.Parties.Shared
 {
     public sealed record PartyBasicDto(
+        int Id,
         string Signature,
         string DisplayName,
-        short Type,
-        byte? Subtype,
-        string TypeName,
-        string SubtypeName,
-        int CustomerStatus,
-        string CustomerStatusName,
+        PartyClassificationDto Classification,
         string? TaxId,
         bool IsActive,
         string? FirstName,

@@ -1,17 +1,22 @@
-﻿using SubiektNexoConnector.Core.Application.Parties.Shared;
-namespace SubiektNexoConnector.Core.Application.Parties.CreateParty
+using SubiektNexoConnector.Core.Application.Parties.Shared;
+
+namespace SubiektNexoConnector.Core.Application.Parties.CreateParty;
+
+public sealed class CreatePartyHandler
 {
-    public sealed class CreatePartyHandler
+    private readonly IPartyRepository _repository;
+    private readonly IPartyReadModelSynchronizer _readModelSynchronizer;
+
+    public CreatePartyHandler(IPartyRepository repository, IPartyReadModelSynchronizer readModelSynchronizer)
     {
-        private readonly IPartyRepository _repository;
-        
-        public CreatePartyHandler(IPartyRepository repository)
-        {
-            _repository = repository;
-        }
-        public PartyDetailsDto Handle(CreatePartyCommand command)
-        {
-            return _repository.CreateParty(command);
-        }
+        _repository = repository;
+        _readModelSynchronizer = readModelSynchronizer;
+    }
+
+    public async Task<PartyDetailsDto> HandleAsync(CreatePartyCommand command, CancellationToken cancellationToken = default)
+    {
+        var party = _repository.CreateParty(command);
+        await _readModelSynchronizer.TryUpsertAsync(party, cancellationToken);
+        return party;
     }
 }

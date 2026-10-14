@@ -4,11 +4,11 @@ namespace SubiektNexoConnector.Core.Application.Products;
 
 public sealed class ProductFreshnessPolicy : IProductFreshnessPolicy
 {
-    private readonly IMaterializationPolicyStore _materializationPolicyStore;
+    private readonly IMaterializationFreshnessEvaluator _freshnessEvaluator;
 
-    public ProductFreshnessPolicy(IMaterializationPolicyStore materializationPolicyStore)
+    public ProductFreshnessPolicy(IMaterializationFreshnessEvaluator freshnessEvaluator)
     {
-        _materializationPolicyStore = materializationPolicyStore;
+        _freshnessEvaluator = freshnessEvaluator;
     }
     public async Task<MaterializationMetadata> GetMetadataAsync(ProductDetailsDto product, DateTime refreshedAtUtc, CancellationToken cancellationToken = default)
     {
@@ -22,10 +22,6 @@ public sealed class ProductFreshnessPolicy : IProductFreshnessPolicy
             ?? throw new InvalidOperationException(
                 $"Product '{product.SKU}' does not match any materialization policy.");
 
-        var policy = await _materializationPolicyStore.GetOrCreateAsync(
-            definition,
-            cancellationToken);
-
-        return MaterializationMetadata.Evaluate(refreshedAtUtc, policy.Lifetime, policy.RefreshAhead, DateTime.UtcNow);
+        return await _freshnessEvaluator.EvaluateAsync(definition, refreshedAtUtc, cancellationToken);
     }
 }

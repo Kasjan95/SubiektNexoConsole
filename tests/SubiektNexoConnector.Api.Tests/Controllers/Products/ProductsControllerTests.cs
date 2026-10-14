@@ -15,15 +15,15 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
         {
             var reader = Substitute.For<IProductReadModelReader>();
             var checkpointStore = Substitute.For<IMaterializationCheckpointStore>();
-            var policyStore = Substitute.For<IMaterializationPolicyStore>();
+            var freshnessEvaluator = Substitute.For<IMaterializationFreshnessEvaluator>();
             var products = new List<ProductBasicDto>
             {
                 new ProductBasicDto(1, "PROD-001", "Product 1", "1234567890123"),
                 new ProductBasicDto(2, "PROD-002", "Product 2", null)
             };
-            ConfigureCompletedDiscovery(checkpointStore, policyStore);
+            ConfigureCompletedDiscovery(checkpointStore, freshnessEvaluator);
             reader.GetAllAsync(Arg.Any<GetProductsQuery>(), Arg.Any<CancellationToken>()).Returns(products);
-            var handler = new GetProductsHandler(reader, checkpointStore, policyStore);
+            var handler = new GetProductsHandler(reader, checkpointStore, freshnessEvaluator);
             var controller = CreateController();
 
             var actionResult = await controller.GetAll(handler, cancellationToken: CancellationToken.None);
@@ -38,11 +38,11 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
         {
             var reader = Substitute.For<IProductReadModelReader>();
             var checkpointStore = Substitute.For<IMaterializationCheckpointStore>();
-            var policyStore = Substitute.For<IMaterializationPolicyStore>();
+            var freshnessEvaluator = Substitute.For<IMaterializationFreshnessEvaluator>();
             var products = new List<ProductBasicDto>();
-            ConfigureCompletedDiscovery(checkpointStore, policyStore);
+            ConfigureCompletedDiscovery(checkpointStore, freshnessEvaluator);
             reader.GetAllAsync(Arg.Any<GetProductsQuery>(), Arg.Any<CancellationToken>()).Returns(products);
-            var handler = new GetProductsHandler(reader, checkpointStore, policyStore);
+            var handler = new GetProductsHandler(reader, checkpointStore, freshnessEvaluator);
             var controller = CreateController();
 
             var actionResult = await controller.GetAll(handler, cancellationToken: CancellationToken.None);
@@ -57,8 +57,8 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
         {
             var reader = Substitute.For<IProductReadModelReader>();
             var checkpointStore = Substitute.For<IMaterializationCheckpointStore>();
-            var policyStore = Substitute.For<IMaterializationPolicyStore>();
-            var handler = new GetProductsHandler(reader, checkpointStore, policyStore);
+            var freshnessEvaluator = Substitute.For<IMaterializationFreshnessEvaluator>();
+            var handler = new GetProductsHandler(reader, checkpointStore, freshnessEvaluator);
             var controller = CreateController();
 
             var actionResult = await controller.GetAll(handler, page: 0, cancellationToken: CancellationToken.None);
@@ -75,9 +75,9 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
         {
             var reader = Substitute.For<IProductReadModelReader>();
             var checkpointStore = Substitute.For<IMaterializationCheckpointStore>();
-            var policyStore = Substitute.For<IMaterializationPolicyStore>();
+            var freshnessEvaluator = Substitute.For<IMaterializationFreshnessEvaluator>();
             checkpointStore.GetOrCreateAsync(MaterializationPolicyDefinitions.ProductsNew.Id, Arg.Any<CancellationToken>()).Returns(CreateCheckpoint(null));
-            var handler = new GetProductsHandler(reader, checkpointStore, policyStore);
+            var handler = new GetProductsHandler(reader, checkpointStore, freshnessEvaluator);
             var controller = CreateController();
 
             var actionResult = await controller.GetAll(handler, cancellationToken: CancellationToken.None);
@@ -138,11 +138,12 @@ namespace SubiektNexoConnector.Api.Tests.Controllers
             ControllerContext = new ControllerContext { HttpContext = new DefaultHttpContext() }
         };
 
-        private static void ConfigureCompletedDiscovery(IMaterializationCheckpointStore checkpointStore, IMaterializationPolicyStore policyStore)
+        private static void ConfigureCompletedDiscovery(IMaterializationCheckpointStore checkpointStore, IMaterializationFreshnessEvaluator freshnessEvaluator)
         {
             var definition = MaterializationPolicyDefinitions.ProductsNew;
-            checkpointStore.GetOrCreateAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(CreateCheckpoint(DateTime.UtcNow));
-            policyStore.GetOrCreateAsync(definition, Arg.Any<CancellationToken>()).Returns(new MaterializationPolicy(definition.Id, definition.Name, definition.Lifetime, definition.RefreshAhead, definition.BatchSize, definition.CandidateSelection, definition.Requirements, DateTime.UtcNow));
+            var completedAtUtc = DateTime.UtcNow;
+            checkpointStore.GetOrCreateAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(CreateCheckpoint(completedAtUtc));
+            freshnessEvaluator.EvaluateAsync(definition, completedAtUtc, Arg.Any<CancellationToken>()).Returns(new MaterializationMetadata(MaterializationStatus.Fresh, completedAtUtc));
         }
 
         private static MaterializationCheckpoint CreateCheckpoint(DateTime? completedAtUtc) => new(MaterializationPolicyDefinitions.ProductsNew.Id, null, null, null, completedAtUtc, null, null);

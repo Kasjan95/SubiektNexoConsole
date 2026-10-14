@@ -1,7 +1,7 @@
-using SubiektNexoConnector.Core.Application.Parties.Addresses.Shared;
+using SubiektNexoConnector.Core.Application.Parties.Shared;
 
 namespace SubiektNexoConnector.Core.Application.Parties.Addresses.CreateAddress;
 
 public sealed record CreatePartyAddressResult(
-    PartyAddressDto Address,
+    PartyDetailsDto Party,
     bool IsCreated);

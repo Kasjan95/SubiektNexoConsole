@@ -89,6 +89,7 @@ try
     builder.Services.AddIdempotencyPersistence(builder.Configuration);
     builder.Services.AddHostedService<AdvancedFieldDefinitionsMaterializationWorker>();
     builder.Services.AddHostedService<ProductMaterializationWorker>();
+    builder.Services.AddHostedService<PartyMaterializationWorker>();
 
     var app = builder.Build();
     var configuredDatabasePath = builder.Configuration["Idempotency:DatabasePath"]!;

@@ -189,6 +189,354 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
                     b.ToTable("MaterializationStates", (string)null);
                 });
 
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyAddressEntity", b =>
+                {
+                    b.Property<int>("PartyId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("AddressId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("AddressTypeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AddressTypeName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApartmentNumber")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("City")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("CountryId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("HouseNumber")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Municipality")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PostalCode")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RefreshedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Street")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Voivodeship")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PartyId", "AddressId");
+
+                    b.ToTable("PartyAddresses", (string)null);
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyAdvancedFieldEntity", b =>
+                {
+                    b.Property<int>("PartyId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("FieldId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool?>("BooleanValue")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DataType")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("DateValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("DecimalValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid?>("DictionaryGuidKey")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("DictionaryIntegerKey")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("GuidValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("IntegerValue")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("RefreshedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TextValue")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PartyId", "FieldId");
+
+                    b.HasIndex("FieldId");
+
+                    b.ToTable("PartyAdvancedFields", (string)null);
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyBasicFieldsEntity", b =>
+                {
+                    b.Property<int>("PartyId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Field1")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Field2")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Field3")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Field4")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Field5")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Field6")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Field7")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Field8")
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte>("PresentFieldsMask")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("RefreshedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PartyId");
+
+                    b.ToTable("PartyBasicFields", (string)null);
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyContactEntity", b =>
+                {
+                    b.Property<int>("PartyId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ContactId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContactDescription")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContactType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ContactTypeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ContactValue")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("RefreshedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PartyId", "ContactId");
+
+                    b.ToTable("PartyContacts", (string)null);
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BusinessRegistryNumber")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CompanyName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CustomerStatus")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("CustomerStatusName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EuTaxId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FirstName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("FlagComment")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("FlagId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("GoodsIssueAboveMaximumAmountPercent")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("GoodsIssueBelowMaximumAmountPercent")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("GoodsIssueCreditLimitEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("GoodsIssueMaximumAmount")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LastName")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("MaximumPaymentDelayDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int?>("MaximumUnpaidDocumentCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("NationalCourtRegisterNumber")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("OrderAboveMaximumAmountPercent")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("OrderBelowMaximumAmountPercent")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("OrderCreditLimitEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("OrderMaximumAmount")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("OverallCreditLimit")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PartyGroup")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int?>("PaymentTermDays")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("RefreshedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("SalesAboveMaximumAmountPercent")
+                        .HasColumnType("TEXT");
+
+                    b.Property<decimal?>("SalesBelowMaximumAmountPercent")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("SalesCreditLimitEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<decimal?>("SalesMaximumAmount")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Signature")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<byte?>("Subtype")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("SubtypeName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("TaxId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("TradeCreditEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<short>("Type")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("TypeName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RefreshedAtUtc");
+
+                    b.HasIndex("Signature")
+                        .IsUnique()
+                        .HasDatabaseName("UX_Parties_Signature");
+
+                    b.HasIndex("CustomerStatus", "Type");
+
+                    b.ToTable("Parties", (string)null);
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyFeatureEntity", b =>
+                {
+                    b.Property<int>("PartyId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("RefreshedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PartyId", "Name");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("PartyFeatures", (string)null);
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyIndustryEntity", b =>
+                {
+                    b.Property<int>("PartyId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("RefreshedAtUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("PartyId", "Name");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("PartyIndustries", (string)null);
+                });
+
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductAdvancedFieldEntity", b =>
                 {
                     b.Property<int>("ProductId")
@@ -420,6 +768,60 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyAddressEntity", b =>
+                {
+                    b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyEntity", null)
+                        .WithMany("Addresses")
+                        .HasForeignKey("PartyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyAdvancedFieldEntity", b =>
+                {
+                    b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyEntity", null)
+                        .WithMany("AdvancedFields")
+                        .HasForeignKey("PartyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyBasicFieldsEntity", b =>
+                {
+                    b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyEntity", null)
+                        .WithOne("BasicFields")
+                        .HasForeignKey("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyBasicFieldsEntity", "PartyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyContactEntity", b =>
+                {
+                    b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyEntity", null)
+                        .WithMany("Contacts")
+                        .HasForeignKey("PartyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyFeatureEntity", b =>
+                {
+                    b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyEntity", null)
+                        .WithMany("Features")
+                        .HasForeignKey("PartyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyIndustryEntity", b =>
+                {
+                    b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyEntity", null)
+                        .WithMany("Industries")
+                        .HasForeignKey("PartyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductAdvancedFieldEntity", b =>
                 {
                     b.HasOne("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductEntity", null)
@@ -468,6 +870,21 @@ namespace SubiektNexoConnector.Infrastructure.Materialization.Persistence.Migrat
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.AdvancedFieldDefinitionEntity", b =>
                 {
                     b.Navigation("DictionaryOptions");
+                });
+
+            modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.PartyEntity", b =>
+                {
+                    b.Navigation("Addresses");
+
+                    b.Navigation("AdvancedFields");
+
+                    b.Navigation("BasicFields");
+
+                    b.Navigation("Contacts");
+
+                    b.Navigation("Features");
+
+                    b.Navigation("Industries");
                 });
 
             modelBuilder.Entity("SubiektNexoConnector.Infrastructure.Materialization.Persistence.ProductEntity", b =>

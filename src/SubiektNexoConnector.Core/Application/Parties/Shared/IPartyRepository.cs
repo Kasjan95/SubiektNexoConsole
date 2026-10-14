@@ -10,6 +10,8 @@ using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
 using SubiektNexoConnector.Core.Application.Parties.PatchParty;
+using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
+using SubiektNexoConnector.Core.Application.Parties;
 
 namespace SubiektNexoConnector.Core.Application.Parties.Shared
 {
@@ -20,14 +22,16 @@ namespace SubiektNexoConnector.Core.Application.Parties.Shared
         PartyDetailsDto CreateParty(CreatePartyCommand command);
         IReadOnlyCollection<PartyBasicDto> GetAllParties(GetPartiesQuery query);
         PartyDetailsDto? GetDetailsParty(GetPartyDetailsQuery query);
-        string? PatchParty(PatchPartyCommand command);
+        PartyDetailsDto? GetDetailsForMaterialization(string signature, IReadOnlyCollection<AdvancedFieldDefinitionDto> advancedFieldDefinitions, CancellationToken cancellationToken = default);
+        PartyMaterializationSourceBatch GetDetailsBatchAfterId(int? afterId, int batchSize, IReadOnlyCollection<AdvancedFieldDefinitionDto> advancedFieldDefinitions, CancellationToken cancellationToken = default);
+        PartyDetailsDto? PatchParty(PatchPartyCommand command);
 
         CreatePartyAddressResult? CreatePartyAddress(CreatePartyAddressCommand command);
-        PartyAddressDto? PatchPartyAddress(PatchPartyAddressCommand command);
-        DeletePartyResourceResult DeletePartyAddress(DeletePartyAddressCommand command);
+        PartyDetailsDto? PatchPartyAddress(PatchPartyAddressCommand command);
+        PartyDetailsDto? DeletePartyAddress(DeletePartyAddressCommand command);
 
-        PartyContactDto? CreatePartyContact(CreatePartyContactCommand command);
-        DeletePartyResourceResult DeletePartyContact(DeletePartyContactCommand command);
-        PartyContactDto? PatchPartyContact(PatchPartyContactCommand command);
+        PartyDetailsDto? CreatePartyContact(CreatePartyContactCommand command);
+        PartyDetailsDto? DeletePartyContact(DeletePartyContactCommand command);
+        PartyDetailsDto? PatchPartyContact(PatchPartyContactCommand command);
     }
 }

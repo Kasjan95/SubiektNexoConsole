@@ -1,5 +1,7 @@
 using InsERT.Moria.Sfera;
 using NSubstitute;
+using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
+using SubiektNexoConnector.Core.Application.Parties;
 using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Infrastructure.Abstractions;
 using SubiektNexoConnector.Infrastructure.Nexo;
@@ -46,6 +48,18 @@ public class NexoPartyRepositoryTests
         Assert.Equal(1, sferaExecutor.InvocationCount);
     }
 
+    [Fact]
+    public void GetDetailsBatchAfterId_UsesSingleSferaExecutionLease()
+    {
+        var sferaExecutor = new CountingSferaExecutor();
+        var repository = new NexoPartyRepository(sferaExecutor);
+
+        var result = repository.GetDetailsBatchAfterId(null, 50, Array.Empty<AdvancedFieldDefinitionDto>());
+
+        Assert.Equal(1, sferaExecutor.InvocationCount);
+        Assert.Empty(result.Parties);
+    }
+
     private sealed class CountingSferaExecutor : ISferaExecutor
     {
         public int InvocationCount { get; private set; }
@@ -57,6 +71,9 @@ public class NexoPartyRepositoryTests
             string sourceFilePath = "")
         {
             InvocationCount++;
+            if (typeof(T) == typeof(PartyMaterializationSourceBatch))
+                return (T)(object)new PartyMaterializationSourceBatch([], null, false);
+
             return default!;
         }
 

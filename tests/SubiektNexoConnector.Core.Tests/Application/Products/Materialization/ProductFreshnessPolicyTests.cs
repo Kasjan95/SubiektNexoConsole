@@ -18,31 +18,17 @@ public sealed class ProductFreshnessPolicyTests
         var expectedDefinition = expectedToBeHot
             ? MaterializationPolicyDefinitions.ProductsHot
             : MaterializationPolicyDefinitions.ProductsCold;
-        var store = Substitute.For<IMaterializationPolicyStore>();
-        var configuredLifetime = TimeSpan.FromMinutes(5);
-        store.GetOrCreateAsync(
-                expectedDefinition,
-                Arg.Any<CancellationToken>())
-            .Returns(new MaterializationPolicy(
-                expectedDefinition.Id,
-                expectedDefinition.Name,
-                configuredLifetime,
-                expectedDefinition.RefreshAhead,
-                expectedDefinition.BatchSize,
-                expectedDefinition.CandidateSelection,
-                expectedDefinition.Requirements,
-                new DateTime(2020, 1, 1, 0, 0, 0, DateTimeKind.Utc)));
-        var policy = new ProductFreshnessPolicy(store);
+        var evaluator = Substitute.For<IMaterializationFreshnessEvaluator>();
         var refreshedAtUtc = DateTime.UtcNow;
+        evaluator.EvaluateAsync(expectedDefinition, refreshedAtUtc, Arg.Any<CancellationToken>()).Returns(new MaterializationMetadata(MaterializationStatus.Fresh, refreshedAtUtc));
+        var policy = new ProductFreshnessPolicy(evaluator);
         var product = CreateProduct(availableStock, reservedStock);
 
         var result = await policy.GetMetadataAsync(product, refreshedAtUtc);
 
         Assert.Equal(MaterializationStatus.Fresh, result.Status);
         Assert.Equal(refreshedAtUtc, result.LastSuccessAtUtc);
-        await store.Received(1).GetOrCreateAsync(
-            expectedDefinition,
-            Arg.Any<CancellationToken>());
+        await evaluator.Received(1).EvaluateAsync(expectedDefinition, refreshedAtUtc, Arg.Any<CancellationToken>());
     }
 
     private static ProductDetailsDto CreateProduct(

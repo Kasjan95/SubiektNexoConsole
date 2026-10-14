@@ -4,7 +4,12 @@ using InsERT.Moria.Flagi;
 using InsERT.Moria.Narzedzia.PolaWlasne2;
 using InsERT.Moria.PolaWlasne2;
 using InsERT.Moria.Sfera;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using SubiektNexoConnector.Core.Application.AdditionalFields.AdvancedFieldDefinitions.Shared;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 using SubiektNexoConnector.Core.Application.Common;
+using SubiektNexoConnector.Core.Application.Parties;
 using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Application.Parties.GetParties;
 using SubiektNexoConnector.Core.Application.Parties.GetPartyDetails;
@@ -20,16 +25,19 @@ using SubiektNexoConnector.Core.Application.Parties.Contacts.Shared;
 using SubiektNexoConnector.Core.Application.Parties.Contacts.CreateContact;
 using SubiektNexoConnector.Core.Application.Parties.Contacts.DeleteContact;
 using SubiektNexoConnector.Core.Application.Parties.Contacts.PatchContact;
+using System.Diagnostics;
 
 namespace SubiektNexoConnector.Infrastructure.Nexo
 {
     public class NexoPartyRepository : IPartyRepository
     {
         private readonly ISferaExecutor _sferaExecutor;
+        private readonly ILogger<NexoPartyRepository> _logger;
 
-        public NexoPartyRepository(ISferaExecutor sferaExecutor)
+        public NexoPartyRepository(ISferaExecutor sferaExecutor, ILogger<NexoPartyRepository>? logger = null)
         {
             _sferaExecutor = sferaExecutor;
+            _logger = logger ?? NullLogger<NexoPartyRepository>.Instance;
         }
         #region GET
         public IReadOnlyCollection<PartyBasicDto> GetAllParties(GetPartiesQuery query)
@@ -89,7 +97,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 .Select(subtype => new PartyTypeOptionDto(
                     PodtypPodmiotuZakresy.OkreslaOsobe(subtype) ? (short)1 : (short)2,
                     (byte)subtype,
-                    subtype.ToString()))
+                    NexoEnumDisplayName.Get(subtype)))
                 .ToList();
 
             return new PartyCreateOptionsDto(
@@ -136,6 +144,57 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             return _sferaExecutor.Execute(sfera => GetDetailsPartyCore(sfera, query.PartySignature));
         }
 
+        public PartyDetailsDto? GetDetailsForMaterialization(string signature, IReadOnlyCollection<AdvancedFieldDefinitionDto> advancedFieldDefinitions, CancellationToken cancellationToken = default)
+        {
+            ArgumentException.ThrowIfNullOrWhiteSpace(signature);
+            ArgumentNullException.ThrowIfNull(advancedFieldDefinitions);
+
+            return _sferaExecutor.Execute(sfera =>
+            {
+                var party = sfera.Podmioty().Dane.Wszystkie(item => item.Sygnatura.PelnaSygnatura == signature).FirstOrDefault();
+                if (party is null)
+                    return null;
+
+                var basicFieldDefinitions = sfera.PodajObiektTypu<IProstePolaWlasne>();
+                return MapDetailsUsingMaterializedDefinitions(sfera, party, basicFieldDefinitions, advancedFieldDefinitions);
+            }, cancellationToken);
+        }
+
+        public PartyMaterializationSourceBatch GetDetailsBatchAfterId(int? afterId, int batchSize, IReadOnlyCollection<AdvancedFieldDefinitionDto> advancedFieldDefinitions, CancellationToken cancellationToken = default)
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(batchSize);
+            ArgumentNullException.ThrowIfNull(advancedFieldDefinitions);
+
+            var stopwatch = Stopwatch.StartNew();
+            var batchResult = _sferaExecutor.Execute(sfera =>
+            {
+                var source = sfera.Podmioty().Dane.Wszystkie();
+                if (afterId.HasValue)
+                    source = source.Where(party => party.Id > afterId.Value);
+
+                var candidates = source.OrderBy(party => party.Id).Take(checked(batchSize + 1)).ToList();
+                var hasMore = candidates.Count > batchSize;
+                var batch = candidates.Take(batchSize).ToArray();
+                var basicFieldDefinitions = sfera.PodajObiektTypu<IProstePolaWlasne>();
+                var result = new List<PartyDetailsDto>(batch.Length);
+
+                foreach (var party in batch)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var details = MapDetailsUsingMaterializedDefinitions(sfera, party, basicFieldDefinitions, advancedFieldDefinitions);
+                    if (details is not null)
+                        result.Add(details);
+                }
+
+                return new PartyMaterializationSourceBatch(result, batch.Length == 0 ? afterId : batch[^1].Id, hasMore);
+            }, cancellationToken);
+
+            stopwatch.Stop();
+            var partiesPerSecond = batchResult.Parties.Count / Math.Max(stopwatch.Elapsed.TotalSeconds, 0.001);
+            _logger.LogInformation("Loaded party details batch from Nexo. Returned: {ReturnedCount}; duration: {DurationMs} ms; rate: {PartiesPerSecond} parties/s.", batchResult.Parties.Count, stopwatch.Elapsed.TotalMilliseconds, partiesPerSecond);
+            return batchResult;
+        }
+
         private static PartyDetailsDto? GetDetailsPartyCore(Uchwyt sfera, string partySignature)
         {
             Podmiot? party = sfera.Podmioty().Dane
@@ -161,48 +220,29 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                     PolaWlasneAdv2AccessorFactoryNullHandlingKind.CreateReadonlyStub)
                 : null;
 
-            List<PartyAddressDto> addresses = party.Adresy.Select(NexoPartyMapper.MapAddress).ToList();
-            TradeCreditLimitDto tradeCreditLimit = NexoPartyMapper.MapTradeCreditLimit(party);
-            List<PartyContactDto> contacts = party.Kontakty.Select(NexoPartyMapper.MapContact).ToList();
+            var basicFields = NexoAdditionalFieldValueMapper.MapBasic(basicFieldDefinitions, basicFieldValues, typeof(Podmiot));
+            IReadOnlyCollection<AdditionalFieldValueDto> advancedFieldValuesDto = advancedFieldValues is null ? [] : NexoAdditionalFieldValueMapper.MapAdvanced(advancedFieldDefinitions, advancedFieldValues);
+            return NexoPartyMapper.MapDetails(party, basicFields, advancedFieldValuesDto);
+        }
 
-            return new PartyDetailsDto(
-                party.Sygnatura.PelnaSygnatura,
-                party.NazwaSkrocona,
-                party.Aktywny,
-                PartyCodeDictionary.GetTypeName(party.Typ),
-                party.PobierzNazweGrupyTypu(),
-                party.Osoba?.Imie,
-                party.Osoba?.Nazwisko,
-                party.Firma?.Nazwa,
-                party.NIP,
-                party.NIPUE,
-                party.Firma?.REGON,
-                party.Firma?.KRS,
-                party.Grupy.FirstOrDefault()?.Nazwa,
-                party.Branze.Select(industry => industry.Nazwa).ToList(),
-                party.Cechy.Select(c => c.Nazwa).ToList(),
-                party.Uwagi,
-                party.FlagaWlasna is null
-                    ? null
-                    : new FlagAssignmentDto(
-                        party.FlagaWlasna.Id,
-                        party.FlagHeader?.Description),
-                NexoAdditionalFieldValueMapper.MapBasic(
-                    basicFieldDefinitions,
-                    basicFieldValues,
-                    typeof(Podmiot)),
-                advancedFieldValues is null
-                    ? []
-                    : NexoAdditionalFieldValueMapper.MapAdvanced(
-                        advancedFieldDefinitions,
-                        advancedFieldValues),
-                addresses,
-                contacts,
-                tradeCreditLimit);
+        private static PartyDetailsDto? MapDetailsUsingMaterializedDefinitions(Uchwyt sfera, Podmiot party, IProstePolaWlasne basicFieldDefinitions, IReadOnlyCollection<AdvancedFieldDefinitionDto> advancedFieldDefinitions)
+        {
+            using var partyBo = sfera.Podmioty().Znajdz(party);
+            if (partyBo is null)
+                return null;
+
+            var basicFieldValues = sfera.UtworzPolaWlasneStdAccessor(partyBo.Dane);
+            var basicFields = NexoAdditionalFieldValueMapper.MapBasic(basicFieldDefinitions, basicFieldValues, typeof(Podmiot));
+            if (advancedFieldDefinitions.Count == 0)
+                return NexoPartyMapper.MapDetails(party, basicFields, []);
+
+            var advancedFieldValues = sfera.UtworzPolaWlasneAdv2Accessor(partyBo.Dane, PolaWlasneAdv2AccessorFactoryNullHandlingKind.CreateReadonlyStub);
+            var advancedFields = NexoAdditionalFieldValueMapper.MapAdvanced(advancedFieldDefinitions, advancedFieldValues);
+            return NexoPartyMapper.MapDetails(party, basicFields, advancedFields);
         }
         #endregion
         #region PATCH
-        public string? PatchParty(PatchPartyCommand command)
+        public PartyDetailsDto? PatchParty(PatchPartyCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
 
@@ -216,7 +256,7 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             if (IsFlagOnlyPatch(command))
             {
                 UpdatePartyFlag(sfera, partyBo.Dane.Id, command.Flag.Value);
-                return partyBo.Dane.Sygnatura.PelnaSygnatura;
+                return GetUpdatedPartyDetails(sfera, partyBo.Dane.Sygnatura.PelnaSygnatura);
             }
 
             var isLocked = partyBo.Zablokuj();
@@ -312,10 +352,16 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             if (command.Flag.HasValue)
                 UpdatePartyFlag(sfera, partyBo.Dane.Id, command.Flag.Value);
 
-            return updatedSignature;
+            return GetUpdatedPartyDetails(sfera, updatedSignature);
             });
         }
-        public PartyAddressDto? PatchPartyAddress(PatchPartyAddressCommand command)
+
+        private static PartyDetailsDto GetUpdatedPartyDetails(Uchwyt sfera, string signature)
+        {
+            return GetDetailsPartyCore(sfera, signature)
+                ?? throw new InvalidOperationException($"Updated party '{signature}' could not be read back.");
+        }
+        public PartyDetailsDto? PatchPartyAddress(PatchPartyAddressCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
             return _sferaExecutor.Execute(sfera =>
@@ -362,15 +408,16 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                         "Party address update failed:",
                         partyBo.PobierzKomunikatyBledow()));
                 }
-                return NexoPartyMapper.MapAddress(address);
             }
             finally
             {
                 partyBo.Odblokuj();
             }
+
+            return GetUpdatedPartyDetails(sfera, command.PartySignature);
             });
         }
-        public PartyContactDto? PatchPartyContact(PatchPartyContactCommand command)
+        public PartyDetailsDto? PatchPartyContact(PatchPartyContactCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
             return _sferaExecutor.Execute(sfera =>
@@ -400,12 +447,13 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                         "Party contact update failed:",
                         partyBo.PobierzKomunikatyBledow()));
                 }
-                return NexoPartyMapper.MapContact(contact);
             }
             finally
             {
                 partyBo.Odblokuj();
             }
+
+            return GetUpdatedPartyDetails(sfera, command.PartySignature);
             });
         }
         private static bool IsFlagOnlyPatch(PatchPartyCommand command) =>
@@ -569,26 +617,28 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             if (!partyBo.Zablokuj())
                 throw new InvalidOperationException("Party could not be locked for address creation.");
 
+            var primaryAddressTypeId = sfera.TypyAdresu().DaneDomyslne.Glowny.Id;
+            var isCreated = command.Address.AddressTypeId != primaryAddressTypeId || party.AdresPodstawowy is null;
+
             try
             {
-                var primaryAddressTypeId = sfera.TypyAdresu().DaneDomyslne.Glowny.Id;
-                var isCreated = command.Address.AddressTypeId != primaryAddressTypeId || party.AdresPodstawowy is null;
-                var address = AddAddresses(sfera, partyBo, party, [command.Address]).Single();
+                AddAddresses(sfera, partyBo, party, [command.Address]);
                 if (!partyBo.Zapisz())
                 {
                     throw new InvalidOperationException(NexoValidationMessageBuilder.Build(
                         "Party address creation failed:",
                         partyBo.PobierzKomunikatyBledow()));
                 }
-                return new CreatePartyAddressResult(NexoPartyMapper.MapAddress(address), isCreated);
             }
             finally
             {
                 partyBo.Odblokuj();
             }
+
+            return new CreatePartyAddressResult(GetUpdatedPartyDetails(sfera, command.PartySignature), isCreated);
             });
         }
-        public PartyContactDto? CreatePartyContact(CreatePartyContactCommand command)
+        public PartyDetailsDto? CreatePartyContact(CreatePartyContactCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
             return _sferaExecutor.Execute(sfera =>
@@ -610,12 +660,13 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                         "Party contact creation failed:",
                         partyBo.PobierzKomunikatyBledow()));
                 }
-                return NexoPartyMapper.MapContact(party.Kontakty.Last());
             }
             finally
             {
                 partyBo.Odblokuj();
             }
+
+            return GetUpdatedPartyDetails(sfera, command.PartySignature);
             });
         }
 
@@ -709,18 +760,18 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
         }
         #endregion
         #region DELETE
-        public DeletePartyResourceResult DeletePartyAddress(DeletePartyAddressCommand command)
+        public PartyDetailsDto? DeletePartyAddress(DeletePartyAddressCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
             return _sferaExecutor.Execute(sfera =>
             {
             using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
             if (partyBo is null)
-                return DeletePartyResourceResult.NotFound;
+                return null;
 
             var address = partyBo.Dane.Adresy.SingleOrDefault(item => item.Id == command.AddressId);
             if (address == null)
-                return DeletePartyResourceResult.NotFound;
+                return null;
 
             if (!partyBo.Zablokuj())
             {
@@ -736,26 +787,27 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                         "Party address deletion failed:",
                         partyBo.PobierzKomunikatyBledow()));
                 }
-                return DeletePartyResourceResult.Deleted;
             }
             finally
             {
                 partyBo.Odblokuj();
             }
+
+            return GetUpdatedPartyDetails(sfera, command.PartySignature);
             });
         }
-        public DeletePartyResourceResult DeletePartyContact(DeletePartyContactCommand command)
+        public PartyDetailsDto? DeletePartyContact(DeletePartyContactCommand command)
         {
             ArgumentNullException.ThrowIfNull(command);
             return _sferaExecutor.Execute(sfera =>
             {
             using var partyBo = sfera.Podmioty().Znajdz(command.PartySignature);
             if (partyBo is null)
-                return DeletePartyResourceResult.NotFound;
+                return null;
 
             var contact = partyBo.Dane.Kontakty.SingleOrDefault(item => item.Id == command.ContactId);
             if (contact == null)
-                return DeletePartyResourceResult.NotFound;
+                return null;
 
             if (!partyBo.Zablokuj())
             {
@@ -771,12 +823,13 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                         "Party contact deletion failed:",
                         partyBo.PobierzKomunikatyBledow()));
                 }
-                return DeletePartyResourceResult.Deleted;
             }
             finally
             {
                 partyBo.Odblokuj();
             }
+
+            return GetUpdatedPartyDetails(sfera, command.PartySignature);
             });
         }
         #endregion

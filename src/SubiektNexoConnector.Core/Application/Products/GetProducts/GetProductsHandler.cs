@@ -7,12 +7,12 @@ namespace SubiektNexoConnector.Core.Application.Products
     {
         private readonly IProductReadModelReader _productReadModelReader;
         private readonly IMaterializationCheckpointStore _materializationCheckpointStore;
-        private readonly IMaterializationPolicyStore _materializationPolicyStore;
-        public GetProductsHandler(IProductReadModelReader productReadModelReader, IMaterializationCheckpointStore materializationCheckpointStore, IMaterializationPolicyStore materializationPolicyStore)
+        private readonly IMaterializationFreshnessEvaluator _freshnessEvaluator;
+        public GetProductsHandler(IProductReadModelReader productReadModelReader, IMaterializationCheckpointStore materializationCheckpointStore, IMaterializationFreshnessEvaluator freshnessEvaluator)
         {
             _productReadModelReader = productReadModelReader;
             _materializationCheckpointStore = materializationCheckpointStore;
-            _materializationPolicyStore = materializationPolicyStore;
+            _freshnessEvaluator = freshnessEvaluator;
         }
 
         public async Task<MaterializedResult<IReadOnlyCollection<ProductBasicDto>?>> HandleAsync(GetProductsQuery query, CancellationToken cancellationToken = default)
@@ -25,8 +25,7 @@ namespace SubiektNexoConnector.Core.Application.Products
             if (checkpoint.LastCycleCompletedAtUtc is null)
                 return new MaterializedResult<IReadOnlyCollection<ProductBasicDto>?>(null, new MaterializationMetadata(MaterializationStatus.Unavailable, null));
 
-            var policy = await _materializationPolicyStore.GetOrCreateAsync(definition, cancellationToken);
-            var metadata = MaterializationMetadata.Evaluate(checkpoint.LastCycleCompletedAtUtc, policy.Lifetime, policy.RefreshAhead, DateTime.UtcNow);
+            var metadata = await _freshnessEvaluator.EvaluateAsync(definition, checkpoint.LastCycleCompletedAtUtc, cancellationToken);
             var products = await _productReadModelReader.GetAllAsync(query, cancellationToken);
             return new MaterializedResult<IReadOnlyCollection<ProductBasicDto>?>(products, metadata);
         }

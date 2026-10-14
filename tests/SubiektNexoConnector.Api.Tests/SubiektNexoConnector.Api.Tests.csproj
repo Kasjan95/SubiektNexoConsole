@@ -25,6 +25,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="InsERT.Moria.API">
+      <HintPath>$(nexoSdkBinPath)InsERT.Moria.API.dll</HintPath>
+    </Reference>
     <Reference Include="InsERT.Moria.Sfera">
       <HintPath>$(nexoSdkBinPath)InsERT.Moria.Sfera.dll</HintPath>
     </Reference>

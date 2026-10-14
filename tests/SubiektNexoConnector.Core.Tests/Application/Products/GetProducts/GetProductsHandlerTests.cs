@@ -11,16 +11,16 @@ public class GetProductsHandlerTests
     {
         var reader = Substitute.For<IProductReadModelReader>();
         var checkpointStore = Substitute.For<IMaterializationCheckpointStore>();
-        var policyStore = Substitute.For<IMaterializationPolicyStore>();
+        var freshnessEvaluator = Substitute.For<IMaterializationFreshnessEvaluator>();
         var expectedProducts = new List<ProductBasicDto>
         {
             new(1, "Prod.1.SKU", "Product 1 Name", "1234567890"),
             new(2, "Prod.2.SKU", "Product 2 Name", null)
         };
         var query = new GetProductsQuery();
-        ConfigureCompletedDiscovery(checkpointStore, policyStore, DateTime.UtcNow);
+        ConfigureCompletedDiscovery(checkpointStore, freshnessEvaluator, DateTime.UtcNow, MaterializationStatus.Fresh);
         reader.GetAllAsync(query, Arg.Any<CancellationToken>()).Returns(expectedProducts);
-        var handler = new GetProductsHandler(reader, checkpointStore, policyStore);
+        var handler = new GetProductsHandler(reader, checkpointStore, freshnessEvaluator);
 
         var result = await handler.HandleAsync(query);
 
@@ -34,17 +34,17 @@ public class GetProductsHandlerTests
     {
         var reader = Substitute.For<IProductReadModelReader>();
         var checkpointStore = Substitute.For<IMaterializationCheckpointStore>();
-        var policyStore = Substitute.For<IMaterializationPolicyStore>();
+        var freshnessEvaluator = Substitute.For<IMaterializationFreshnessEvaluator>();
         var query = new GetProductsQuery();
         checkpointStore.GetOrCreateAsync(MaterializationPolicyDefinitions.ProductsNew.Id, Arg.Any<CancellationToken>()).Returns(CreateCheckpoint(null));
-        var handler = new GetProductsHandler(reader, checkpointStore, policyStore);
+        var handler = new GetProductsHandler(reader, checkpointStore, freshnessEvaluator);
 
         var result = await handler.HandleAsync(query);
 
         Assert.Null(result.Value);
         Assert.Equal(MaterializationStatus.Unavailable, result.Metadata.Status);
         await reader.DidNotReceive().GetAllAsync(Arg.Any<GetProductsQuery>(), Arg.Any<CancellationToken>());
-        await policyStore.DidNotReceive().GetOrCreateAsync(Arg.Any<MaterializationPolicyDefinition>(), Arg.Any<CancellationToken>());
+        await freshnessEvaluator.DidNotReceiveWithAnyArgs().EvaluateAsync(default!, default, default);
     }
 
     [Fact]
@@ -52,11 +52,11 @@ public class GetProductsHandlerTests
     {
         var reader = Substitute.For<IProductReadModelReader>();
         var checkpointStore = Substitute.For<IMaterializationCheckpointStore>();
-        var policyStore = Substitute.For<IMaterializationPolicyStore>();
+        var freshnessEvaluator = Substitute.For<IMaterializationFreshnessEvaluator>();
         var query = new GetProductsQuery();
-        ConfigureCompletedDiscovery(checkpointStore, policyStore, DateTime.UtcNow.AddHours(-1));
+        ConfigureCompletedDiscovery(checkpointStore, freshnessEvaluator, DateTime.UtcNow.AddHours(-1), MaterializationStatus.Stale);
         reader.GetAllAsync(query, Arg.Any<CancellationToken>()).Returns([]);
-        var handler = new GetProductsHandler(reader, checkpointStore, policyStore);
+        var handler = new GetProductsHandler(reader, checkpointStore, freshnessEvaluator);
 
         var result = await handler.HandleAsync(query);
 
@@ -65,11 +65,11 @@ public class GetProductsHandlerTests
         Assert.Equal(MaterializationStatus.Stale, result.Metadata.Status);
     }
 
-    private static void ConfigureCompletedDiscovery(IMaterializationCheckpointStore checkpointStore, IMaterializationPolicyStore policyStore, DateTime completedAtUtc)
+    private static void ConfigureCompletedDiscovery(IMaterializationCheckpointStore checkpointStore, IMaterializationFreshnessEvaluator freshnessEvaluator, DateTime completedAtUtc, MaterializationStatus status)
     {
         var definition = MaterializationPolicyDefinitions.ProductsNew;
         checkpointStore.GetOrCreateAsync(definition.Id, Arg.Any<CancellationToken>()).Returns(CreateCheckpoint(completedAtUtc));
-        policyStore.GetOrCreateAsync(definition, Arg.Any<CancellationToken>()).Returns(new MaterializationPolicy(definition.Id, definition.Name, definition.Lifetime, definition.RefreshAhead, definition.BatchSize, definition.CandidateSelection, definition.Requirements, DateTime.UtcNow));
+        freshnessEvaluator.EvaluateAsync(definition, completedAtUtc, Arg.Any<CancellationToken>()).Returns(new MaterializationMetadata(status, completedAtUtc));
     }
 
     private static MaterializationCheckpoint CreateCheckpoint(DateTime? completedAtUtc) => new(MaterializationPolicyDefinitions.ProductsNew.Id, null, null, null, completedAtUtc, null, null);
