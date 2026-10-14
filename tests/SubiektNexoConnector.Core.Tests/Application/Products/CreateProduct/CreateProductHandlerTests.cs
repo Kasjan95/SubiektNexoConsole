@@ -10,7 +10,7 @@ namespace SubiektNexoConnector.Core.Tests.Application.Products
         {
             var repository = Substitute.For<IProductRepository>();
             var synchronizer = Substitute.For<IProductReadModelSynchronizer>();
-            var command = new CreateProductCommand("Test product", "PROD-001", "5901234567890");
+            var command = new CreateProductCommand("Test product", "PROD-001", "5901234567890", []);
             var product = new ProductDetailsDto(1, "PROD-001", "Test product", "5901234567890", new ProductTypeDto("GOODS", "Goods"), true, null, null, [], [], [], [], []);
             repository.Create(command).Returns(product);
             synchronizer.TryUpsertAsync(product, Arg.Any<CancellationToken>()).Returns(true);
@@ -28,7 +28,7 @@ namespace SubiektNexoConnector.Core.Tests.Application.Products
         {
             var repository = Substitute.For<IProductRepository>();
             var synchronizer = Substitute.For<IProductReadModelSynchronizer>();
-            var command = new CreateProductCommand("Test product", "PROD-001", null);
+            var command = new CreateProductCommand("Test product", "PROD-001", null, []);
             repository.Create(command).Returns(_ => throw new InvalidOperationException("Product already exists."));
             var handler = new CreateProductHandler(repository, synchronizer);
 
@@ -44,7 +44,7 @@ namespace SubiektNexoConnector.Core.Tests.Application.Products
         {
             var repository = Substitute.For<IProductRepository>();
             var synchronizer = Substitute.For<IProductReadModelSynchronizer>();
-            var command = new CreateProductCommand("Test product", "PROD-001", null);
+            var command = new CreateProductCommand("Test product", "PROD-001", null, []);
             var product = new ProductDetailsDto(1, "PROD-001", "Test product", null, new ProductTypeDto("GOODS", "Goods"), true, null, null, [], [], [], [], []);
             repository.Create(command).Returns(product);
             synchronizer.TryUpsertAsync(product, Arg.Any<CancellationToken>()).Returns(false);

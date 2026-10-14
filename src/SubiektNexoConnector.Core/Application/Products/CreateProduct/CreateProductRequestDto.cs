@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 
 namespace SubiektNexoConnector.Core.Application.Products
 {
@@ -7,6 +8,7 @@ namespace SubiektNexoConnector.Core.Application.Products
         [MinLength(1)]
         string Name,
         string? SKU,
-        string? EAN
+        string? EAN,
+        IReadOnlyCollection<AdditionalFieldValueDto>? AdvancedFields
     );
 }

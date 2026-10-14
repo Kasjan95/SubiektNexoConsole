@@ -9,12 +9,52 @@ using SubiektNexoConnector.Core.Application.Parties.Shared;
 using SubiektNexoConnector.Core.Application.Parties.Addresses.Shared;
 using SubiektNexoConnector.Core.Application.Parties.Contacts.Shared;
 using SubiektNexoConnector.Core.Application.Parties;
+using SubiektNexoConnector.Core.Application.Parties.CreateParty;
 using SubiektNexoConnector.Core.Materialization;
 
 namespace SubiektNexoConnector.Api.Tests.Controllers.Parties;
 
 public class PartiesControllerTests
 {
+    [Fact]
+    public async Task Create_PassesAdvancedFieldsToRepository()
+    {
+        var repository = Substitute.For<IPartyRepository>();
+        var synchronizer = Substitute.For<IPartyReadModelSynchronizer>();
+        AdditionalFieldValueDto[] advancedFields = [new("I0", "Required value")];
+        var request = new CreatePartyRequestDto(
+            "Test party",
+            2,
+            7,
+            "PARTY-001",
+            null,
+            null,
+            "Test party",
+            null,
+            null,
+            null,
+            null,
+            null,
+            [],
+            [],
+            null,
+            [],
+            [],
+            advancedFields);
+        var party = CreatePartyDetails();
+        repository.CreateParty(Arg.Any<CreatePartyCommand>()).Returns(party);
+
+        var result = await new PartiesController().Create(
+            request,
+            new CreatePartyHandler(repository, synchronizer),
+            CancellationToken.None);
+
+        var createdResult = Assert.IsType<CreatedAtActionResult>(result.Result);
+        Assert.Equal(party, createdResult.Value);
+        repository.Received(1).CreateParty(Arg.Is<CreatePartyCommand>(command =>
+            command.AdvancedFields.SequenceEqual(advancedFields)));
+    }
+
     [Fact]
     public async Task GetDetails_ReturnsOkWithParty_WhenPartyExists()
     {

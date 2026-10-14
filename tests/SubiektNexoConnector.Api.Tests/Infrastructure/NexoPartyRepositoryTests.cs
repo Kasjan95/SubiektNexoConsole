@@ -41,6 +41,7 @@ public class NexoPartyRepositoryTests
             [],
             null,
             [],
+            [],
             []);
 
         _ = repository.CreateParty(command);

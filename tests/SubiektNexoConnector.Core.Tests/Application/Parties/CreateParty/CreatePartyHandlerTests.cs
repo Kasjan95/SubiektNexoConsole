@@ -59,7 +59,7 @@ public class CreatePartyHandlerTests
         Assert.Equal(party, result);
     }
 
-    private static CreatePartyCommand CreateCommand() => new("Test party", 2, 7, "PARTY-001", null, null, "Test party", null, null, null, null, null, [], [], null, [], []);
+    private static CreatePartyCommand CreateCommand() => new("Test party", 2, 7, "PARTY-001", null, null, "Test party", null, null, null, null, null, [], [], null, [], [], []);
 
     private static PartyDetailsDto CreateParty() => new(
         1,

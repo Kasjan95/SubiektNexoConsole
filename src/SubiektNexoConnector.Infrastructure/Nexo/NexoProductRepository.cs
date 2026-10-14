@@ -264,6 +264,26 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
                 primaryUnit.PodstawowyKodKreskowy = productEan;
             }
 
+            if (command.AdvancedFields.Count > 0)
+            {
+                var advancedFields = sfera.PodajObiektTypu<IZaawansowanePolaWlasne>();
+                if (!advancedFields.SprobujPobracZaawansowanePolaWlasne(
+                    typeof(InsERT.Moria.ModelDanych.Asortyment),
+                    out var advancedDefinitions))
+                {
+                    throw new InvalidOperationException("Product does not support advanced fields.");
+                }
+
+                var advancedValues = sfera.UtworzPolaWlasneAdv2Accessor(
+                    product.Dane,
+                    PolaWlasneAdv2AccessorFactoryNullHandlingKind.CreateAndAttach);
+
+                NexoAdditionalFieldValueMapper.ApplyAdvanced(
+                    advancedDefinitions,
+                    advancedValues,
+                    command.AdvancedFields);
+            }
+
             if (!product.Zapisz())
             {
                 throw new InvalidOperationException(NexoValidationMessageBuilder.Build(

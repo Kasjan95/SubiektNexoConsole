@@ -1,5 +1,7 @@
 namespace SubiektNexoConnector.Core.Application.Parties.CreateParty;
 
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
+
 public sealed record CreatePartyCommand(
     string DisplayName,
     short Type,
@@ -21,7 +23,8 @@ public sealed record CreatePartyCommand(
     string? Notes,
 
     IReadOnlyCollection<PartyAddressInput> Addresses,
-    IReadOnlyCollection<PartyContactInput> Contacts
+    IReadOnlyCollection<PartyContactInput> Contacts,
+    IReadOnlyCollection<AdditionalFieldValueDto> AdvancedFields
 );
 
 public sealed record PartyAddressInput(

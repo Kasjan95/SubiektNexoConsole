@@ -23,7 +23,8 @@ public class ProductsController : ControllerBase
         var command = new CreateProductCommand(
             request.Name,
             request.SKU,
-            request.EAN
+            request.EAN,
+            request.AdvancedFields ?? []
         );
 
         var product = await handler.HandleAsync(command, cancellationToken);

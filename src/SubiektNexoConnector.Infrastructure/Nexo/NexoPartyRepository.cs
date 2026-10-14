@@ -595,6 +595,27 @@ namespace SubiektNexoConnector.Infrastructure.Nexo
             SetFeatures(sfera, party, command.FeatureIds);
             AddAddresses(sfera, partyBo, party, command.Addresses);
             AddContacts(sfera, party, command.Contacts);
+
+            if (command.AdvancedFields.Count > 0)
+            {
+                var advancedFields = sfera.PodajObiektTypu<IZaawansowanePolaWlasne>();
+                if (!advancedFields.SprobujPobracZaawansowanePolaWlasne(
+                    typeof(Podmiot),
+                    out var advancedDefinitions))
+                {
+                    throw new InvalidOperationException("Party does not support advanced fields.");
+                }
+
+                var advancedValues = sfera.UtworzPolaWlasneAdv2Accessor(
+                    party,
+                    PolaWlasneAdv2AccessorFactoryNullHandlingKind.CreateAndAttach);
+
+                NexoAdditionalFieldValueMapper.ApplyAdvanced(
+                    advancedDefinitions,
+                    advancedValues,
+                    command.AdvancedFields);
+            }
+
             if (!partyBo.Zapisz())
             {
                 throw new InvalidOperationException(NexoValidationMessageBuilder.Build(

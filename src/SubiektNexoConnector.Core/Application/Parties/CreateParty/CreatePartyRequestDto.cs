@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using SubiektNexoConnector.Core.Application.AdditionalFields.Shared;
 
 namespace SubiektNexoConnector.Core.Application.Parties.CreateParty;
 
@@ -30,7 +31,8 @@ public sealed record CreatePartyRequestDto(
     string? Notes,
 
     IReadOnlyCollection<PartyAddressRequestDto>? Addresses,
-    IReadOnlyCollection<PartyContactRequestDto>? Contacts
+    IReadOnlyCollection<PartyContactRequestDto>? Contacts,
+    IReadOnlyCollection<AdditionalFieldValueDto>? AdvancedFields
 );
 
 public sealed record PartyAddressRequestDto(

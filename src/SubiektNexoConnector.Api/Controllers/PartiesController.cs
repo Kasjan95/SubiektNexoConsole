@@ -52,7 +52,8 @@ public class PartiesController : ControllerBase
                 contact.ContactTypeId,
                 contact.Value,
                 contact.IsPrimary,
-                contact.Comment)).ToArray() ?? Array.Empty<PartyContactInput>()), cancellationToken);
+                contact.Comment)).ToArray() ?? Array.Empty<PartyContactInput>(),
+            request.AdvancedFields ?? []), cancellationToken);
 
         return CreatedAtAction(
             nameof(GetDetails),

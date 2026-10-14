@@ -99,14 +99,18 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
         var request = new CreateProductRequestDto(
             "Test product",
             "ABC-123",
-            "5901234567890");
+            "5901234567890",
+            [new("I0", "Required value")]);
         var product = ProductDetailsDtoTestData.CreateProductDetailsDto(request.SKU!, request.EAN);
 
         _factory.Products
             .Create(Arg.Is<CreateProductCommand>(command =>
                 command.Name == request.Name &&
                 command.SKU == request.SKU &&
-                command.EAN == request.EAN))
+                command.EAN == request.EAN &&
+                command.AdvancedFields.Count == 1 &&
+                command.AdvancedFields.Single().Id == "I0" &&
+                command.AdvancedFields.Single().Value!.ToString() == "Required value"))
             .Returns(product);
 
         var response = await _client.PostAsJsonAsync("/products", request);
@@ -133,7 +137,8 @@ public class ProductsHttpTests : IClassFixture<TestApiFactory>
         var request = new CreateProductRequestDto(
             "Test product",
             "ABC-123",
-            "5901234567890");
+            "5901234567890",
+            []);
 
         _factory.Products
             .Create(Arg.Any<CreateProductCommand>())
